@@ -18,13 +18,11 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <exception>
 #include <functional>
 #include <list>
 #include <map>
 #include <memory>
 #include <optional>
-#include <ostream>
 #include <regex>  // NOLINT
 #include <set>
 #include <sstream>
@@ -43,6 +41,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/str_replace.h"
@@ -63,8 +62,6 @@
 #include "clang/include/clang/Basic/LLVM.h"
 #include "clang/include/clang/Basic/OperatorKinds.h"
 #include "clang/include/clang/Basic/SourceLocation.h"
-#include "clang/include/clang/Basic/SourceManager.h"
-#include "clang/include/clang/Basic/TypeTraits.h"
 #include "llvm/include/llvm/ADT/APInt.h"
 #include "llvm/include/llvm/ADT/FloatingPointMode.h"
 #include "llvm/include/llvm/ADT/StringRef.h"
@@ -82,13 +79,13 @@
 #include "xls/ir/ir_parser.h"
 #include "xls/ir/nodes.h"
 #include "xls/ir/op.h"
+#include "xls/ir/package.h"
 #include "xls/ir/source_location.h"
 #include "xls/ir/type.h"
 #include "xls/ir/value.h"
 #include "xls/ir/value_utils.h"
-#include "xls/passes/optimization_pass.h"
-#include "xls/passes/optimization_pass_pipeline.h"
 #include "xls/solvers/z3_utils.h"
+#include "../z3/src/api/z3_api.h"
 #include "re2/re2.h"
 
 using std::list;
@@ -4714,7 +4711,10 @@ absl::StatusOr<CValue> Translator::GenerateIR_LocalChannel(
       xls::Channel * xls_channel,
       package_->CreateStreamingChannel(
           ch_name, xls::ChannelOps::kSendReceive, item_type_xls,
-          /*initial_values=*/{}, /*fifo_config=*/xls::FifoConfig{.depth = 0},
+          /*initial_values=*/{}, /*fifo_config=*/
+          xls::FifoConfig(/*depth=*/0, /*bypass=*/true,
+                          /*register_push_outputs=*/false,
+                          /*register_pop_outputs=*/false),
           xls::FlowControl::kReadyValid));
 
   unused_xls_channel_ops_.push_back({xls_channel, /*is_send=*/true});
@@ -5915,19 +5915,6 @@ absl::StatusOr<bool> Translator::ExprIsChannel(const clang::Expr* object,
     return false;
   }
   return TypeIsChannel(object->getType(), loc);
-}
-
-absl::Status Translator::InlineAllInvokes(xls::Package* package) {
-  std::unique_ptr<xls::OptimizationCompoundPass> pipeline =
-      xls::CreateOptimizationPassPipeline();
-  xls::OptimizationPassOptions options;
-  xls::PassResults results;
-
-  // This pass wants a delay estimator
-  options.skip_passes = {"bdd_cse"};
-
-  XLS_RETURN_IF_ERROR(pipeline->Run(package, options, &results).status());
-  return absl::OkStatus();
 }
 
 absl::StatusOr<xls::BValue> Translator::GenTypeConvert(

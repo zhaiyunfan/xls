@@ -30,9 +30,11 @@ cc_library(
         "//xls/common:math_util",
         "//xls/common/status:ret_check",
         "//xls/common/status:status_macros",
+        "//xls/ir:bits",
         "//xls/ir:source_location",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/types:span",
     ],
 )
 
@@ -68,6 +70,7 @@ cc_library(
         "//xls/common/file:filesystem",
         "//xls/common/file:get_runfile_path",
         "//xls/common/status:status_macros",
+        "//xls/ir:source_location",
         "//xls/tools:verilog_include",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -86,6 +89,7 @@ cc_binary(
         "//xls/common:exit_status",
         "//xls/common:init_xls",
         "//xls/common/file:filesystem",
+        "//xls/ir:source_location",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
@@ -115,7 +119,9 @@ cc_binary(
         "//xls/common:init_xls",
         "//xls/ir:format_preference",
         "//xls/ir:ir_parser",
+        "//xls/ir:value",
         "@com_google_absl//absl/flags:flag",
+        "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/types:span",
@@ -133,11 +139,14 @@ cc_library(
         "//xls/common/file:filesystem",
         "//xls/common/status:ret_check",
         "//xls/common/status:status_macros",
+        "//xls/ir:bits",
+        "//xls/ir:value",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/types:span",
     ],
 )
 
@@ -159,6 +168,7 @@ cc_library(
     deps = [
         ":io_strategy",
         "//xls/codegen:vast",
+        "//xls/ir:source_location",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
     ],
@@ -210,5 +220,6 @@ cc_library(
         "@com_google_absl//absl/base:no_destructor",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:str_format",
     ],
 )

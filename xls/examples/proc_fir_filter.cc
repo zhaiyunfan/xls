@@ -13,7 +13,6 @@
 
 #include "xls/examples/proc_fir_filter.h"
 
-#include <string>
 #include <string_view>
 
 #include "absl/status/status.h"
@@ -23,10 +22,10 @@
 #include "xls/ir/bits.h"
 #include "xls/ir/channel.h"
 #include "xls/ir/function_builder.h"
-#include "xls/ir/node_util.h"
 #include "xls/ir/nodes.h"
-#include "xls/ir/op.h"
+#include "xls/ir/package.h"
 #include "xls/ir/source_location.h"
+#include "xls/ir/value.h"
 #include "xls/ir/value_utils.h"
 
 namespace xls {
@@ -71,7 +70,9 @@ absl::StatusOr<Proc*> CreateFirFilter(std::string_view name,
   // Create ProcBuilder and assign two channels.
   // The proc state is a Tuple. Element 0 is the result of the current filter
   // convolution. Element 1 is the current input array x.
-  ProcBuilder pb(name, absl::StrFormat("%s_token", name), package);
+  ProcBuilder pb(name, package);
+  BValue tok =
+      pb.StateElement(absl::StrFormat("%s_token", name), Value::Token());
   BValue state =
       pb.StateElement(absl::StrFormat("%s_state", name), shiftreg_init);
 
@@ -90,7 +91,7 @@ absl::StatusOr<Proc*> CreateFirFilter(std::string_view name,
   }
 
   // The input channel gives us the next value to include in x.
-  BValue in = pb.Receive(input_channel, pb.GetTokenParam());
+  BValue in = pb.Receive(input_channel, tok);
 
   BValue kernel = pb.Literal(kernel_value, SourceInfo(), "kernel");
 
@@ -112,10 +113,10 @@ absl::StatusOr<Proc*> CreateFirFilter(std::string_view name,
       pb.CountedFor(accumulator, kernel_value.size(), 1, loopbody, {x, kernel});
 
   // The output channel gives us the output of the FIR filter.
-  BValue out = pb.Send(output_channel, pb.GetTokenParam(), result);
+  BValue out = pb.Send(output_channel, tok, result);
 
   BValue after_all = pb.AfterAll({out,  pb.TupleIndex(in, 0)});
-  XLS_ASSIGN_OR_RETURN(Proc * proc, pb.Build(after_all, {x}));
+  XLS_ASSIGN_OR_RETURN(Proc * proc, pb.Build({after_all, x}));
   return proc;
 }
 

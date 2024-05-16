@@ -28,6 +28,7 @@
 #include <vector>
 
 #include "absl/flags/flag.h"
+#include "absl/log/check.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/types/span.h"
@@ -37,6 +38,7 @@
 #include "xls/contrib/ice40/device_rpc_strategy_factory.h"
 #include "xls/ir/format_preference.h"
 #include "xls/ir/ir_parser.h"
+#include "xls/ir/value.h"
 
 ABSL_FLAG(std::string, target_device, "",
           "Target (category of) device for DRPC targeting; e.g. ice40.");

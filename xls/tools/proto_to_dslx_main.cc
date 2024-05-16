@@ -17,11 +17,12 @@
 #include <string>
 
 #include "absl/flags/flag.h"
+#include "absl/log/check.h"
 #include "absl/status/status.h"
-#include "google/protobuf/text_format.h"
 #include "xls/common/exit_status.h"
 #include "xls/common/file/filesystem.h"
 #include "xls/common/init_xls.h"
+#include "xls/common/status/status_macros.h"
 #include "xls/dslx/frontend/module.h"
 #include "xls/tools/proto_to_dslx.h"
 

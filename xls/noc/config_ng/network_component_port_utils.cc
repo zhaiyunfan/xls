@@ -16,7 +16,9 @@
 
 #include <vector>
 
+#include "absl/container/flat_hash_set.h"
 #include "absl/log/check.h"
+#include "absl/types/span.h"
 #include "xls/common/status/ret_check.h"
 #include "xls/noc/config_ng/network_component_port.h"
 #include "xls/noc/config_ng/network_connection.h"

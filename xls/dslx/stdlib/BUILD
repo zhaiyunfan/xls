@@ -167,7 +167,6 @@ xls_ir_cc_library(
     name = "float32_add_cc",
     src = ":float32_add.opt.ir",
     namespaces = "xls,fp",
-    top = "float32_add",
 )
 
 # TODO(b/152546795): 2021-03-08 Takes too long (~5 minutes). Add
@@ -186,7 +185,7 @@ cc_xls_ir_jit_wrapper(
     name = "float32_add_jit_wrapper",
     src = ":float32_add.opt.ir",
     jit_wrapper_args = {
-        "class_name": "float32_add",
+        "class_name": "Float32Add",
         "namespace": "xls::fp",
     },
 )
@@ -269,7 +268,7 @@ cc_xls_ir_jit_wrapper(
     name = "float32_mul_jit_wrapper",
     src = ":float32_mul.opt.ir",
     jit_wrapper_args = {
-        "class_name": "float32_mul",
+        "class_name": "Float32Mul",
         "namespace": "xls::fp",
     },
 )
@@ -311,7 +310,7 @@ cc_xls_ir_jit_wrapper(
     name = "float32_upcast_jit_wrapper",
     src = ":float32_upcast.opt.ir",
     jit_wrapper_args = {
-        "class_name": "f32_to_f64",
+        "class_name": "F32ToF64",
         "namespace": "xls::fp",
     },
 )
@@ -434,7 +433,6 @@ xls_ir_cc_library(
     name = "float32_fma_cc",
     src = ":float32_fma.opt.ir",
     namespaces = "xls,fp",
-    top = "float32_fma_cc",
 )
 
 # TODO(b/152546795): 2021-03-08 Takes too long (~5 minutes). Add
@@ -453,7 +451,7 @@ cc_xls_ir_jit_wrapper(
     name = "float32_fma_jit_wrapper",
     src = ":float32_fma.opt.ir",
     jit_wrapper_args = {
-        "class_name": "float32_fma",
+        "class_name": "Float32Fma",
         "namespace": "xls::fp",
     },
 )
@@ -472,6 +470,7 @@ cc_test(
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/random",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:str_format",
         "//xls/common:exit_status",
         "//xls/common:init_xls",
         "//xls/common:math_util",
@@ -492,7 +491,7 @@ cc_xls_ir_jit_wrapper(
     name = "float32_ldexp_jit_wrapper",
     src = ":float32_ldexp.opt.ir",
     jit_wrapper_args = {
-        "class_name": "float32_ldexp",
+        "class_name": "Float32Ldexp",
         "namespace": "xls::fp",
     },
 )
@@ -512,6 +511,7 @@ cc_test(
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/random",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:str_format",
         "//xls/common:exit_status",
         "//xls/common:init_xls",
         "//xls/common:math_util",
@@ -544,7 +544,7 @@ cc_xls_ir_jit_wrapper(
     name = "float32_fast_rsqrt_jit_wrapper",
     src = ":float32_fast_rsqrt.opt.ir",
     jit_wrapper_args = {
-        "class_name": "float32_fast_rsqrt",
+        "class_name": "Float32FastRsqrt",
         "namespace": "xls::fp",
     },
 )
@@ -619,7 +619,7 @@ cc_xls_ir_jit_wrapper(
     name = "float64_add_jit_wrapper",
     src = ":float64_add.opt.ir",
     jit_wrapper_args = {
-        "class_name": "float64_add",
+        "class_name": "Float64Add",
         "namespace": "xls::fp",
     },
 )
@@ -692,7 +692,7 @@ cc_xls_ir_jit_wrapper(
     name = "float64_mul_jit_wrapper",
     src = ":float64_mul.opt.ir",
     jit_wrapper_args = {
-        "class_name": "float64_mul",
+        "class_name": "Float64Mul",
         "namespace": "xls::fp",
     },
 )
@@ -741,7 +741,7 @@ cc_xls_ir_jit_wrapper(
     name = "float64_fma_jit_wrapper",
     src = ":float64_fma.opt.ir",
     jit_wrapper_args = {
-        "class_name": "float64_fma",
+        "class_name": "Float64Fma",
         "namespace": "xls::fp",
     },
 )
@@ -760,6 +760,7 @@ cc_test(
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/random",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:str_format",
         "//xls/common:exit_status",
         "//xls/common:init_xls",
         "//xls/common:math_util",

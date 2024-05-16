@@ -16,10 +16,11 @@
 
 #include <string>
 
-#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/strings/str_format.h"
+#include "absl/types/span.h"
 #include "xls/common/status/matchers.h"
+#include "xls/ir/bits.h"
 
 namespace xls::noc {
 namespace {

@@ -31,6 +31,7 @@ cc_test(
         "//xls/ir:bits_ops",
         "//xls/ir:function_builder",
         "//xls/ir:ir_test_base",
+        "//xls/ir:value",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest",
@@ -42,8 +43,10 @@ cc_test(
     srcs = ["ir_types_test.cc"],
     deps = [
         "//xls/common:xls_gunit_main",
-        "//xls/ir",
+        "//xls/ir:bits",
         "//xls/ir:ir_test_base",
+        "//xls/ir:value",
+        "@com_google_absl//absl/types:span",
         "@com_google_googletest//:gtest",
     ],
 )
@@ -76,8 +79,7 @@ py_test(
     name = "documentation_test",
     srcs = ["documentation_test.py"],
     data = [
-        "//docs_src:dslx_reference_md",
-        "//docs_src:dslx_type_system_md",
+        "//docs_src:dslx_documentation_files",
         "//docs_src/tutorials:all_files",
         "//xls/dslx:interpreter_main",
         "//xls/dslx/tests:mod_imported_file",

@@ -503,6 +503,7 @@ cc_library(
     deps = [
         ":network_component_port",
         ":network_connection",
+        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/types:span",
@@ -546,6 +547,7 @@ cc_test(
         ":fake_network_component",
         ":network_component_utils",
         ":network_view",
+        "@com_google_absl//absl/container:flat_hash_map",
         "//xls/common:xls_gunit_main",
         "//xls/common/status:matchers",
         "@com_google_googletest//:gtest",
@@ -654,9 +656,7 @@ cc_library(
         ":dimension_bounds",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:span",
-        "//xls/common/status:status_macros",
         "//xls/data_structures:inline_bitmap",
         "//xls/ir:bits",
     ],
@@ -730,7 +730,6 @@ cc_library(
     deps = [
         ":network_topology_component",
         ":network_view",
-        ":network_view_utils",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "//xls/common/status:status_macros",

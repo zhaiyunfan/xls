@@ -15,8 +15,14 @@
 # Build rules for the IR JIT - converts XLS IR into native host code.
 
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
+
+# pytype binary only
+load("@rules_python//python:proto.bzl", "py_proto_library")
+load("@xls_pip_deps//:requirements.bzl", "requirement")
 load(
     "//xls/build_rules:xls_build_defs.bzl",
+    "cc_xls_ir_jit_wrapper",
+    "xls_dslx_ir",
     "xls_dslx_library",
     "xls_dslx_opt_ir",
     "xls_ir_cc_library",
@@ -44,21 +50,45 @@ cc_binary(
     name = "aot_compiler",
     srcs = ["aot_compiler.cc"],
     deps = [
+        ":aot_entrypoint_cc_proto",
         ":function_jit",
         ":llvm_type_converter",
         ":orc_jit",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/flags:flag",
-        "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:str_format",
+        ":type_layout_cc_proto",
         "//xls/common:init_xls",
         "//xls/common/file:filesystem",
+        "//xls/common/status:ret_check",
         "//xls/common/status:status_macros",
         "//xls/ir",
         "//xls/ir:ir_parser",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/flags:flag",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
         "@com_google_protobuf//:protobuf",
+        "@llvm-project//llvm:ir_headers",
+    ],
+)
+
+py_binary(
+    name = "aot_basic_function_entrypoint_main",
+    srcs = ["aot_basic_function_entrypoint_main.py"],
+    data = [
+        ":aot_basic_function_cc.tmpl",
+        ":aot_basic_function_h.tmpl",
+    ],
+    visibility = ["//xls:xls_users"],
+    deps = [
+        ":aot_entrypoint_py_pb2",
+        ":type_layout_py_pb2",
+        requirement("Jinja2"),
+        requirement("MarkupSafe"),
+        "//xls/common:runfiles",
+        "@com_google_absl_py//absl:app",
+        "@com_google_absl_py//absl/flags",
+        "@com_google_protobuf//:protobuf_python",
     ],
 )
 
@@ -68,6 +98,8 @@ cc_test(
     # The XLS AOT compiler does not currently support cross-compilation.
     deps = [
         ":compound_type_cc",
+        ":multi_function_one_cc",
+        ":multi_function_two_cc",
         ":null_function_cc",
         "//xls/common:xls_gunit_main",
         "//xls/common/status:matchers",
@@ -87,10 +119,11 @@ cc_library(
     deps = [
         ":type_layout",
         ":type_layout_cc_proto",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/types:span",
         "//xls/common/status:status_macros",
         "//xls/ir",
+        "//xls/ir:value",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/types:span",
         "@com_google_protobuf//:protobuf",
     ],
 )
@@ -104,17 +137,6 @@ cc_library(
         ":jit_runtime",
         ":llvm_type_converter",
         ":orc_jit",
-        "@com_google_absl//absl/base",
-        "@com_google_absl//absl/base:config",
-        "@com_google_absl//absl/container:btree",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/container:flat_hash_set",
-        "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_absl//absl/types:span",
         "//xls/common/status:ret_check",
         "//xls/common/status:status_macros",
         "//xls/ir",
@@ -127,48 +149,85 @@ cc_library(
         "//xls/ir:type",
         "//xls/ir:value",
         "//xls/ir:value_utils",
+        "@com_google_absl//absl/base",
+        "@com_google_absl//absl/base:config",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/types:span",
         "@llvm-project//llvm:Core",
     ],
 )
 
 cc_library(
-    name = "jit_wrapper_generator",
-    srcs = ["jit_wrapper_generator.cc"],
-    hdrs = ["jit_wrapper_generator.h"],
+    name = "base_jit_wrapper",
+    hdrs = ["base_jit_wrapper.h"],
+    # Allow jit-wrapper users to see this.
+    visibility = ["//xls:xls_users"],
     deps = [
-        "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/strings",
+        ":function_jit",
+        ":jit_channel_queue",
+        ":jit_proc_runtime",
+        ":jit_runtime",
+        "//xls/common/status:ret_check",
+        "//xls/common/status:status_macros",
+        "//xls/interpreter:proc_runtime",
         "//xls/ir",
+        "//xls/ir:events",
+        "//xls/ir:value",
+        "//xls/ir:value_view",
+        "//xls/public:ir_parser",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/types:span",
     ],
 )
 
-cc_binary(
+py_binary(
     name = "jit_wrapper_generator_main",
-    srcs = ["jit_wrapper_generator_main.cc"],
+    srcs = ["jit_wrapper_generator_main.py"],
+    data = [
+        ":jit_function_wrapper_cc.tmpl",
+        ":jit_function_wrapper_h.tmpl",
+        ":jit_proc_wrapper_cc.tmpl",
+        ":jit_proc_wrapper_h.tmpl",
+        "//xls/tools:extract_interface_main",
+    ],
     visibility = ["//xls:xls_users"],
     deps = [
-        ":jit_wrapper_generator",
-        "@com_google_absl//absl/flags:flag",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings",
-        "//xls/common:case_converters",
-        "//xls/common:exit_status",
-        "//xls/common:init_xls",
-        "//xls/common/file:filesystem",
-        "//xls/common/status:status_macros",
-        "//xls/ir:ir_parser",
+        requirement("Jinja2"),
+        requirement("MarkupSafe"),
+        "//xls/common:runfiles",
+        "//xls/ir:xls_ir_interface_py_pb2",
+        "//xls/ir:xls_type_py_pb2",
+        "@com_google_absl_py//absl:app",
+        "@com_google_absl_py//absl/flags",
     ],
 )
 
 cc_test(
-    name = "jit_wrapper_generator_test",
-    srcs = ["jit_wrapper_generator_test.cc"],
+    name = "jit_wrapper_test",
+    srcs = ["jit_wrapper_test.cc"],
     deps = [
-        ":jit_wrapper_generator",
+        ":compound_type_jit_wrapper",
         "//xls/common:xls_gunit_main",
         "//xls/common/status:matchers",
-        "//xls/ir",
-        "//xls/ir:ir_parser",
+        "//xls/dslx/stdlib:float32_mul_jit_wrapper",
+        "//xls/dslx/stdlib:float32_upcast_jit_wrapper",
+        "//xls/examples/dslx_module:some_caps_jit_wrapper",
+        "//xls/examples/dslx_module:some_caps_opt_jit_wrapper",
+        "//xls/ir:bits",
+        "//xls/ir:value",
+        "//xls/ir:value_builder",
+        "//xls/ir:value_view",
+        "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest",
     ],
 )
@@ -194,17 +253,17 @@ cc_library(
     deps = [
         ":function_jit",
         ":observer",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/types:span",
         "//xls/common/status:ret_check",
         "//xls/common/status:status_macros",
         "//xls/interpreter:ir_interpreter",
         "//xls/ir",
         "//xls/ir:events",
         "//xls/ir:value",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/types:span",
     ],
 )
 
@@ -219,17 +278,17 @@ cc_library(
     deps = [
         ":function_jit",
         ":observer",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/types:span",
         "//xls/common/status:ret_check",
         "//xls/common/status:status_macros",
         "//xls/interpreter:ir_interpreter",
         "//xls/ir",
         "//xls/ir:events",
         "//xls/ir:value",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/types:span",
     ],
 )
 
@@ -238,7 +297,6 @@ cc_test(
     srcs = ["switchable_function_jit_test.cc"],
     deps = [
         ":switchable_function_jit",
-        "@com_google_absl//absl/status:statusor",
         "//xls/common:xls_gunit_main",
         "//xls/common/status:matchers",
         "//xls/ir",
@@ -246,6 +304,7 @@ cc_test(
         "//xls/ir:function_builder",
         "//xls/ir:ir_test_base",
         "//xls/ir:value",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest",
     ],
 )
@@ -255,7 +314,6 @@ cc_test(
     srcs = ["switchable_function_jit_interpreter_fallback_test.cc"],
     deps = [
         ":switchable_function_jit-interpreter_fallback",
-        "@com_google_absl//absl/status:statusor",
         "//xls/common:xls_gunit_main",
         "//xls/common/status:matchers",
         "//xls/ir",
@@ -263,6 +321,7 @@ cc_test(
         "//xls/ir:function_builder",
         "//xls/ir:ir_test_base",
         "//xls/ir:value",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest",
     ],
 )
@@ -278,13 +337,6 @@ cc_library(
         ":jit_runtime",
         ":observer",
         ":orc_jit",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/memory",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_absl//absl/types:span",
         "//xls/common/status:ret_check",
         "//xls/common/status:status_macros",
         "//xls/ir",
@@ -293,6 +345,13 @@ cc_library(
         "//xls/ir:type",
         "//xls/ir:value",
         "//xls/ir:value_utils",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/types:span",
         "@llvm-project//llvm:ir_headers",
     ],
 )
@@ -311,16 +370,6 @@ cc_test(
         ":jit_buffer",
         ":jit_runtime",
         ":orc_jit",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/random",
-        "@com_google_absl//absl/random:bit_gen_ref",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_absl//absl/types:span",
         "//xls/common:bits_util",
         "//xls/common:math_util",
         "//xls/common:xls_gunit_main",
@@ -339,6 +388,16 @@ cc_test(
         "//xls/ir:type",
         "//xls/ir:value",
         "//xls/ir:value_view",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/random",
+        "@com_google_absl//absl/random:bit_gen_ref",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/types:span",
         "@com_google_fuzztest//fuzztest",
         "@com_google_googletest//:gtest",
         "@llvm-project//llvm:ir_headers",
@@ -351,13 +410,6 @@ cc_library(
     hdrs = ["jit_channel_queue.h"],
     deps = [
         ":jit_runtime",
-        "@com_google_absl//absl/base:core_headers",
-        "@com_google_absl//absl/container:inlined_vector",
-        "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/memory",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/synchronization",
-        "@com_google_absl//absl/types:span",
         "//xls/common:math_util",
         "//xls/common/status:status_macros",
         "//xls/interpreter:channel_queue",
@@ -365,6 +417,13 @@ cc_library(
         "//xls/ir:channel",
         "//xls/ir:elaboration",
         "//xls/ir:value",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/container:inlined_vector",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/synchronization",
+        "@com_google_absl//absl/types:span",
     ],
 )
 
@@ -375,17 +434,16 @@ cc_test(
         ":jit_channel_queue",
         ":jit_runtime",
         ":orc_jit",
-        "@com_google_absl//absl/status",
         "//xls/common:xls_gunit_main",
         "//xls/common/status:matchers",
-        "//xls/interpreter:channel_queue",
         "//xls/interpreter:channel_queue_test_base",
         "//xls/ir",
         "//xls/ir:bits",
         "//xls/ir:channel",
         "//xls/ir:channel_ops",
-        "//xls/ir:elaboration",
+        "//xls/ir:proc_elaboration",
         "//xls/ir:value",
+        "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest",
     ],
 )
@@ -397,15 +455,17 @@ cc_library(
     deps = [
         ":llvm_type_converter",
         ":orc_jit",
-        "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_absl//absl/types:span",
         "//xls/common/status:status_macros",
         "//xls/ir",
+        "//xls/ir:bits",
         "//xls/ir:ir_parser",
         "//xls/ir:type",
         "//xls/ir:value",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/types:span",
         "@llvm-project//llvm:AArch64AsmParser",  # build_cleaner: keep
         "@llvm-project//llvm:AArch64CodeGen",  # build_cleaner: keep
         "@llvm-project//llvm:Core",
@@ -421,13 +481,14 @@ cc_library(
     hdrs = ["llvm_type_converter.h"],
     deps = [
         ":type_layout",
+        "//xls/common/status:status_macros",
+        "//xls/ir:type",
+        "//xls/ir:value",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status:statusor",
-        "//xls/common/status:status_macros",
-        "//xls/ir:type",
-        "//xls/ir:value",
+        "@com_google_absl//absl/strings",
         "@llvm-project//llvm:Core",
         "@llvm-project//llvm:Support",
     ],
@@ -439,6 +500,9 @@ cc_library(
     hdrs = ["orc_jit.h"],
     deps = [
         ":observer",
+        "//xls/common/logging:log_lines",
+        "//xls/common/status:ret_check",
+        "//xls/common/status:status_macros",
         "@com_google_absl//absl/base",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/memory",
@@ -446,9 +510,6 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
-        "//xls/common/logging:log_lines",
-        "//xls/common/status:ret_check",
-        "//xls/common/status:status_macros",
         "@llvm-project//llvm:AArch64AsmParser",  # build_cleaner: keep
         "@llvm-project//llvm:AArch64CodeGen",  # build_cleaner: keep
         "@llvm-project//llvm:Analysis",
@@ -477,13 +538,6 @@ cc_library(
         ":jit_buffer",
         ":jit_runtime",
         ":orc_jit",
-        "@com_google_absl//absl/base:core_headers",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_absl//absl/types:span",
         "//xls/common/status:ret_check",
         "//xls/common/status:status_macros",
         "//xls/interpreter:block_evaluator",
@@ -494,6 +548,13 @@ cc_library(
         "//xls/ir:type",
         "//xls/ir:value",
         "//xls/ir:value_utils",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/types:span",
     ],
 )
 
@@ -503,7 +564,6 @@ cc_test(
     deps = [
         ":block_jit",
         ":jit_runtime",
-        "@com_google_absl//absl/types:span",
         "//xls/common:xls_gunit_main",
         "//xls/common/status:matchers",
         "//xls/interpreter:block_evaluator_test_base",
@@ -513,6 +573,7 @@ cc_test(
         "//xls/ir:ir_test_base",
         "//xls/ir:value",
         "//xls/ir:value_view",
+        "@com_google_absl//absl/types:span",
         "@com_google_googletest//:gtest",
     ],
 )
@@ -529,6 +590,14 @@ cc_library(
         ":jit_runtime",
         ":observer",
         ":orc_jit",
+        "//xls/common/status:ret_check",
+        "//xls/common/status:status_macros",
+        "//xls/interpreter:proc_evaluator",
+        "//xls/ir",
+        "//xls/ir:channel",
+        "//xls/ir:elaboration",
+        "//xls/ir:events",
+        "//xls/ir:value",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/log:check",
@@ -538,14 +607,6 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:span",
-        "//xls/common/status:ret_check",
-        "//xls/common/status:status_macros",
-        "//xls/interpreter:proc_evaluator",
-        "//xls/ir",
-        "//xls/ir:channel",
-        "//xls/ir:elaboration",
-        "//xls/ir:events",
-        "//xls/ir:value",
     ],
 )
 
@@ -554,13 +615,13 @@ cc_library(
     srcs = ["jit_buffer.cc"],
     hdrs = ["jit_buffer.h"],
     deps = [
+        "//xls/common:math_util",
+        "//xls/common/status:ret_check",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/base",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/types:span",
-        "//xls/common:math_util",
-        "//xls/common/status:ret_check",
     ],
 )
 
@@ -569,12 +630,21 @@ cc_library(
     srcs = ["function_base_jit.cc"],
     hdrs = ["function_base_jit.h"],
     deps = [
+        ":aot_entrypoint_cc_proto",
         ":ir_builder_visitor",
         ":jit_buffer",
         ":jit_channel_queue",
         ":jit_runtime",
         ":llvm_type_converter",
         ":orc_jit",
+        "//xls/common:math_util",
+        "//xls/common/status:ret_check",
+        "//xls/common/status:status_macros",
+        "//xls/ir",
+        "//xls/ir:events",
+        "//xls/ir:op",
+        "//xls/ir:register",
+        "//xls/ir:type",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/base",
         "@com_google_absl//absl/container:btree",
@@ -587,14 +657,6 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:span",
-        "//xls/common:math_util",
-        "//xls/common/status:ret_check",
-        "//xls/common/status:status_macros",
-        "//xls/ir",
-        "//xls/ir:events",
-        "//xls/ir:op",
-        "//xls/ir:register",
-        "//xls/ir:type",
         "@llvm-project//llvm:Support",
         "@llvm-project//llvm:ir_headers",
     ],
@@ -607,19 +669,14 @@ cc_library(
     deps = [
         ":jit_channel_queue",
         ":proc_jit",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_absl//absl/types:span",
         "//xls/common/status:status_macros",
         "//xls/interpreter:channel_queue",
         "//xls/interpreter:proc_evaluator",
-        "//xls/interpreter:proc_interpreter",
         "//xls/interpreter:serial_proc_runtime",
         "//xls/ir",
         "//xls/ir:channel",
-        "//xls/ir:elaboration",
         "//xls/ir:value",
+        "@com_google_absl//absl/status:statusor",
     ],
 )
 
@@ -644,10 +701,10 @@ cc_binary(
     deps = [
         ":jit_channel_queue",
         ":jit_runtime",
-        "@com_google_absl//absl/log:check",
         "//xls/ir",
         "//xls/ir:channel",
         "//xls/ir:elaboration",
+        "@com_google_absl//absl/log:check",
         "@com_google_benchmark//:benchmark_main",
     ],
 )
@@ -658,14 +715,15 @@ cc_library(
     hdrs = ["type_layout.h"],
     deps = [
         ":type_layout_cc_proto",
-        "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_absl//absl/types:span",
+        "//xls/common/status:status_macros",
         "//xls/ir",
         "//xls/ir:ir_parser",
         "//xls/ir:type",
         "//xls/ir:value",
         "//xls/ir:value_utils",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/types:span",
     ],
 )
 
@@ -676,17 +734,20 @@ cc_test(
         ":llvm_type_converter",
         ":orc_jit",
         ":type_layout",
-        "@com_google_absl//absl/strings:str_format",
         "//xls/common:bits_util",
         "//xls/common:xls_gunit_main",
         "//xls/common/logging:log_lines",
         "//xls/common/status:matchers",
         "//xls/data_structures:leaf_type_tree",
         "//xls/interpreter:random_value",
+        "//xls/ir:bits",
         "//xls/ir:ir_parser",
         "//xls/ir:ir_test_base",
         "//xls/ir:number_parser",
         "//xls/ir:type",
+        "//xls/ir:value",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/types:span",
         "@com_google_googletest//:gtest",
     ],
 )
@@ -699,12 +760,12 @@ cc_test(
         ":jit_runtime",
         ":orc_jit",
         ":proc_jit",
-        "@com_google_absl//absl/log:check",
         "//xls/common:xls_gunit_main",
         "//xls/interpreter:channel_queue",
         "//xls/interpreter:proc_evaluator",
         "//xls/interpreter:proc_evaluator_test_base",
         "//xls/ir",
+        "@com_google_absl//absl/log:check",
         "@com_google_googletest//:gtest",
     ],
 )
@@ -718,12 +779,33 @@ build_test(
 )
 
 proto_library(
+    name = "aot_entrypoint_proto",
+    srcs = ["aot_entrypoint.proto"],
+    deps = [":type_layout_proto"],
+)
+
+cc_proto_library(
+    name = "aot_entrypoint_cc_proto",
+    deps = [":aot_entrypoint_proto"],
+)
+
+py_proto_library(
+    name = "aot_entrypoint_py_pb2",
+    deps = [":aot_entrypoint_proto"],
+)
+
+proto_library(
     name = "type_layout_proto",
     srcs = ["type_layout.proto"],
 )
 
 cc_proto_library(
     name = "type_layout_cc_proto",
+    deps = [":type_layout_proto"],
+)
+
+py_proto_library(
+    name = "type_layout_py_pb2",
     deps = [":type_layout_proto"],
 )
 
@@ -746,6 +828,31 @@ xls_ir_cc_library(
 )
 
 xls_dslx_library(
+    name = "multi_function_dslx",
+    srcs = ["multi_func.x"],
+)
+
+xls_dslx_ir(
+    name = "multi_function",
+    dslx_top = "multi_function_one",
+    library = ":multi_function_dslx",
+)
+
+xls_ir_cc_library(
+    name = "multi_function_one_cc",
+    src = ":multi_function.ir",
+    namespaces = "xls,foo,bar",
+    top = "multi_function_one",
+)
+
+xls_ir_cc_library(
+    name = "multi_function_two_cc",
+    src = ":multi_function.ir",
+    namespaces = "xls,foo,bar",
+    top = "multi_function_two",
+)
+
+xls_dslx_library(
     name = "compound_type_dslx",
     srcs = ["compound_type.x"],
 )
@@ -761,4 +868,13 @@ xls_ir_cc_library(
     src = ":compound_type.ir",
     namespaces = "xls",
     top = "fun_test_function",
+)
+
+cc_xls_ir_jit_wrapper(
+    name = "compound_type_jit_wrapper",
+    src = ":compound_type.ir",
+    jit_wrapper_args = {
+        "class_name": "CompoundJitWrapper",
+        "namespace": "something::cool",
+    },
 )

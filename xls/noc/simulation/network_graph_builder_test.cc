@@ -14,12 +14,12 @@
 
 #include "xls/noc/simulation/network_graph_builder.h"
 
-#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/log/log.h"
 #include "xls/common/status/matchers.h"
 #include "xls/noc/config/network_config.pb.h"
 #include "xls/noc/config/network_config_proto_builder.h"
+#include "xls/noc/simulation/common.h"
 
 namespace xls {
 namespace noc {

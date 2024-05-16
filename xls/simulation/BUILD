@@ -22,11 +22,12 @@ cc_test(
     srcs = ["verilog_simulator_test.cc"],
     deps = [
         ":verilog_simulator",
-        ":verilog_simulators",
         ":verilog_test_base",
+        "//xls/codegen:name_to_bit_count",
         "//xls/codegen:vast",
         "//xls/common:xls_gunit_main",
         "//xls/common/status:matchers",
+        "//xls/ir:bits",
         "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest",
     ],
@@ -89,7 +90,7 @@ cc_test(
     shard_count = 10,
     deps = [
         ":module_simulator",
-        ":module_testbench",
+        ":testbench_signal_capture",
         ":verilog_test_base",
         "//xls/codegen:module_signature",
         "//xls/common:xls_gunit_main",
@@ -214,7 +215,20 @@ cc_library(
     deps = [
         ":verilog_simulator",
         "//xls/simulation/simulators:iverilog_simulator",
+        "@com_google_absl//absl/status:statusor",
+    ],
+)
+
+cc_library(
+    name = "default_verilog_simulator",
+    testonly = True,
+    srcs = ["default_verilog_simulator.cc"],
+    hdrs = ["default_verilog_simulator.h"],
+    deps = [
+        "verilog_simulators",
+        ":verilog_simulator",
         "@com_google_absl//absl/flags:flag",
+        "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status:statusor",
     ],
 )
@@ -254,6 +268,7 @@ cc_test(
         "//xls/ir:bits",
         "//xls/ir:channel",
         "//xls/ir:function_builder",
+        "//xls/ir:value",
         "//xls/scheduling:pipeline_schedule",
         "//xls/scheduling:run_pipeline_schedule",
         "//xls/scheduling:scheduling_options",

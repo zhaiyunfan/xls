@@ -30,6 +30,7 @@
 #include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "openssl/aead.h"
 #include "xls/common/exit_status.h"
 #include "xls/common/file/filesystem.h"
@@ -37,7 +38,9 @@
 #include "xls/common/init_xls.h"
 #include "xls/common/status/status_macros.h"
 #include "xls/interpreter/serial_proc_runtime.h"
+#include "xls/ir/bits.h"
 #include "xls/ir/ir_parser.h"
+#include "xls/ir/value.h"
 #include "xls/jit/jit_proc_runtime.h"
 #include "xls/modules/aes/aes_test_common.h"
 

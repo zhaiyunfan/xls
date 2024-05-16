@@ -175,7 +175,7 @@ cc_xls_ir_jit_wrapper(
     name = "idct_chen_jit_wrapper",
     src = ":idct_chen.opt.ir",
     jit_wrapper_args = {
-        "class_name": "idct_chen",
+        "class_name": "IdctChen",
         "namespace": "xls::jpeg",
     },
 )
@@ -210,6 +210,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/types:span",
         "//xls/common/status:ret_check",
         "//xls/common/status:status_macros",
     ],
@@ -222,6 +223,7 @@ cc_test(
         ":constants",
         ":streams",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "//xls/common:xls_gunit_main",
         "//xls/common/status:matchers",
         "@com_google_googletest//:gtest",
@@ -240,6 +242,9 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/types:span",
+        "//xls/common/status:ret_check",
         "//xls/common/status:status_macros",
     ],
 )

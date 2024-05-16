@@ -17,16 +17,26 @@
 // failure and emits failing absl::Status message to stderr.
 
 #include <iostream>
+#include <iterator>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include "absl/flags/flag.h"
 #include "absl/status/status.h"
+#include "absl/types/span.h"
 #include "xls/common/exit_status.h"
 #include "xls/common/file/filesystem.h"
 #include "xls/common/init_xls.h"
 #include "xls/common/status/status_macros.h"
 #include "xls/ir/ir_parser.h"
+#include "xls/ir/package.h"
+#include "xls/ir/verifier.h"
+
+ABSL_FLAG(bool, dump_ir, false,
+          "If true, then dump the IR to stdout after parsing.");
+ABSL_FLAG(bool, verify_ir, false, "If true, then verify the IR after parsing.");
 
 namespace xls {
 namespace tools {
@@ -41,7 +51,14 @@ static absl::Status RealMain(absl::Span<const std::string_view> args) {
   }
   for (std::string_view arg : args) {
     XLS_ASSIGN_OR_RETURN(std::string contents, GetFileContents(arg));
-    XLS_RETURN_IF_ERROR(Parser::ParsePackage(contents).status());
+    XLS_ASSIGN_OR_RETURN(std::unique_ptr<Package> p,
+                         Parser::ParsePackage(contents));
+    if (absl::GetFlag(FLAGS_dump_ir)) {
+      std::cout << p->DumpIr();
+    }
+    if (absl::GetFlag(FLAGS_verify_ir)) {
+      XLS_RETURN_IF_ERROR(VerifyPackage(p.get()));
+    }
   }
   return absl::OkStatus();
 }

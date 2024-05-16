@@ -17,7 +17,6 @@
 #include <cstdint>
 #include <functional>
 #include <optional>
-#include <string>
 #include <utility>
 #include <vector>
 
@@ -25,6 +24,7 @@
 #include "absl/log/check.h"
 #include "absl/log/log.h"
 #include "absl/status/statusor.h"
+#include "absl/types/span.h"
 #include "xls/common/strong_int.h"
 
 namespace xls {

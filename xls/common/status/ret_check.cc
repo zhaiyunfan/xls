@@ -20,11 +20,9 @@
 #include <sstream>
 #include <string>
 
-#include "absl/base/attributes.h"
-#include "absl/base/const_init.h"
 #include "absl/base/log_severity.h"
-#include "absl/flags/flag.h"
 #include "absl/status/status.h"
+#include "xls/common/source_location.h"
 
 namespace xls {
 namespace internal_status_macros_ret_check {

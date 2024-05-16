@@ -26,10 +26,14 @@
 
 #include "gtest/gtest.h"
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/log/log_sink.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
+#include "absl/types/span.h"
 #include "xls/common/file/temp_file.h"
+#include "xls/common/source_location.h"
 #include "xls/common/status/status_macros.h"
 #include "xls/contrib/xlscc/cc_parser.h"
 #include "xls/contrib/xlscc/hls_block.pb.h"
@@ -37,6 +41,7 @@
 #include "xls/ir/bits.h"
 #include "xls/ir/events.h"
 #include "xls/ir/ir_test_base.h"
+#include "xls/ir/node.h"
 #include "xls/ir/value.h"
 
 struct CapturedLogEntry {

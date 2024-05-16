@@ -35,7 +35,7 @@
 #include "xls/common/status/status_macros.h"
 #include "xls/delay_model/analyze_critical_path.h"
 #include "xls/delay_model/delay_estimator.h"
-#include "xls/ir/block.h"
+#include "xls/ir/block.h"  // IWYU pragma: keep
 #include "xls/ir/dfs_visitor.h"
 #include "xls/ir/format_preference.h"
 #include "xls/ir/op.h"
@@ -130,10 +130,10 @@ std::vector<int64_t> GetAssociatedStateIndices(Node* node) {
 
 std::optional<int64_t> MaybeGetStateParamIndex(Node* node) {
   if (node->Is<Param>() && node->function_base()->IsProc()) {
-    Proc* proc = node->function_base()->AsProcOrDie();
-    if (node != proc->TokenParam()) {
-      return proc->GetStateParamIndex(node->As<Param>()).value();
-    }
+    return node->function_base()
+        ->AsProcOrDie()
+        ->GetStateParamIndex(node->As<Param>())
+        .value();
   }
   return std::nullopt;
 }
@@ -470,8 +470,6 @@ absl::StatusOr<std::string> MarkUpIrText(Package* package) {
       Proc* current_proc = current_function->AsProcOrDie();
 
       // Wrap the next elements in spans.
-      XLS_RETURN_IF_ERROR(
-          WrapNextNodeInSpan(current_proc->NextToken(), function_ids, &line));
       if (current_proc->next_values().empty()) {
         for (Node* next_state : current_proc->NextState()) {
           XLS_RETURN_IF_ERROR(

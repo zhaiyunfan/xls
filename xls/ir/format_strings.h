@@ -21,6 +21,8 @@
 #include <variant>
 #include <vector>
 
+#include "absl/status/statusor.h"
+#include "absl/types/span.h"
 #include "xls/ir/format_preference.h"
 
 namespace xls {

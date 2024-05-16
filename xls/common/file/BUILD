@@ -58,6 +58,8 @@ cc_library(
         "//xls/common/status:ret_check",
         "//xls/common/status:status_macros",
         "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//src/google/protobuf/io",
+        "@com_google_protobuf//src/google/protobuf/io:tokenizer",
         "@com_googlesource_code_re2//:re2",
     ],
 )
@@ -136,7 +138,6 @@ cc_test(
         ":path",
         "//xls/common:xls_gunit_main",
         "//xls/common/status:matchers",
-        "//xls/common/status:status_macros",
         "@com_google_googletest//:gtest",
     ],
 )

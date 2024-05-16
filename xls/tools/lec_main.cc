@@ -14,7 +14,7 @@
 
 // Tool to prove or disprove logical equivalence of XLS IR and a netlist.
 
-#include <csignal>
+#include <csignal>  // IWYU pragma: keep
 #include <cstdint>
 #include <cstring>
 #include <filesystem>  // NOLINT
@@ -39,6 +39,7 @@
 #include "xls/ir/function.h"
 #include "xls/ir/ir_parser.h"
 #include "xls/ir/nodes.h"
+#include "xls/ir/op.h"
 #include "xls/ir/package.h"
 #include "xls/ir/type.h"
 #include "xls/netlist/cell_library.h"

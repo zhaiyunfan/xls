@@ -83,9 +83,11 @@ cc_test(
         "@boringssl//:crypto",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/random",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/time",
     ],
@@ -101,7 +103,6 @@ xls_ir_cc_library_macro(
     name = "aes_decrypt_cc",
     src = ":aes_decrypt.ir",
     namespaces = "xls,aes",
-    top = "aes_decrypt",
 )
 
 xls_dslx_library(
@@ -123,7 +124,6 @@ xls_ir_cc_library_macro(
     name = "aes_encrypt_cc",
     src = ":aes_encrypt.ir",
     namespaces = "xls,aes",
-    top = "aes_encrypt",
 )
 
 xls_dslx_library(
@@ -167,7 +167,9 @@ cc_test(
         "//xls/common/file:get_runfile_path",
         "//xls/common/status:status_macros",
         "//xls/interpreter:serial_proc_runtime",
+        "//xls/ir:bits",
         "//xls/ir:ir_parser",
+        "//xls/ir:value",
         "//xls/jit:jit_proc_runtime",
         "@boringssl//:crypto",
         "@com_google_absl//absl/cleanup",
@@ -176,6 +178,7 @@ cc_test(
         "@com_google_absl//absl/random",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
     ],
 )
 
@@ -219,6 +222,7 @@ cc_test(
         "//xls/common:exit_status",
         "//xls/common:init_xls",
         "//xls/common/status:status_macros",
+        "//xls/ir:bits",
         "//xls/ir:value",
         "@boringssl//:crypto",
         "@com_google_absl//absl/flags:flag",
@@ -226,6 +230,7 @@ cc_test(
         "@com_google_absl//absl/random",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/time",
     ],
@@ -270,6 +275,7 @@ cc_binary(
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/random",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
     ],

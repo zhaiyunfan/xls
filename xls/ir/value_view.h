@@ -32,6 +32,7 @@
 
 #include "absl/log/check.h"
 #include "absl/numeric/int128.h"
+#include "absl/types/span.h"
 #include "xls/common/bits_util.h"
 #include "xls/common/math_util.h"
 #include "xls/ir/package.h"
@@ -511,6 +512,14 @@ class PackedTupleView {
     typedef FrontT type;
   };
 };
+
+// Some common view types.
+using PackedFloat = PackedTupleView</* sign */ PackedBitsView<1>,
+                                    /* exponent */ PackedBitsView<8>,
+                                    /* mantissa */ PackedBitsView<23>>;
+using PackedDouble = PackedTupleView</* sign */ PackedBitsView<1>,
+                                     /* exponent */ PackedBitsView<11>,
+                                     /* mantissa */ PackedBitsView<52>>;
 
 }  // namespace xls
 

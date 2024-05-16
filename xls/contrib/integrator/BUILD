@@ -76,10 +76,14 @@ cc_library(
     deps = [
         ":integration_options",
         ":ir_integrator",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/types:span",
+        "//xls/common/status:status_macros",
         "//xls/contrib/integrator/integration_algorithms:basic_integration_algorithm",
         "//xls/ir",
+        "//xls/ir:op",
     ],
 )
 
@@ -91,9 +95,10 @@ cc_test(
         "//xls/common:xls_gunit_main",
         "//xls/common/status:matchers",
         "//xls/ir",
+        "//xls/ir:bits",
         "//xls/ir:ir_matcher",
-        "//xls/ir:ir_parser",
         "//xls/ir:ir_test_base",
+        "//xls/ir:source_location",
         "//xls/ir:verifier",
         "@com_google_googletest//:gtest",
     ],

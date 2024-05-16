@@ -18,6 +18,7 @@
 #include <string>
 
 #include "absl/flags/flag.h"
+#include "absl/log/check.h"
 #include "absl/status/status.h"
 #include "google/protobuf/text_format.h"
 #include "xls/common/exit_status.h"
@@ -25,7 +26,6 @@
 #include "xls/common/init_xls.h"
 #include "xls/common/status/ret_check.h"
 #include "xls/common/status/status_macros.h"
-#include "xls/netlist/cell_library.h"
 #include "xls/netlist/function_extractor.h"
 #include "xls/netlist/netlist.pb.h"
 

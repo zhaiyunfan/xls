@@ -14,8 +14,8 @@
 
 #include "xls/ir/value_test_util.h"
 
-#include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "xls/ir/bits.h"
 #include "xls/ir/value.h"
 
 namespace xls {

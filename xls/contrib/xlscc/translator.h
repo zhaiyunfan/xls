@@ -37,6 +37,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
+#include "absl/types/span.h"
 #include "clang/include/clang/AST/ASTContext.h"
 #include "clang/include/clang/AST/Decl.h"
 #include "clang/include/clang/AST/Expr.h"
@@ -55,9 +56,11 @@
 #include "xls/ir/function.h"
 #include "xls/ir/function_builder.h"
 #include "xls/ir/node.h"
+#include "xls/ir/op.h"
 #include "xls/ir/package.h"
 #include "xls/ir/source_location.h"
 #include "xls/ir/type.h"
+#include "xls/ir/value.h"
 #include "xls/solvers/z3_ir_translator.h"
 #include "../z3/src/api/z3_api.h"
 
@@ -1160,10 +1163,6 @@ class Translator {
       int top_level_init_interval = 0,
       const ChannelOptions& channel_options = {});
 
-  // Ideally, this would be done using the opt_main tool, but for now
-  //  codegen is done by XLS[cc] for combinational blocks.
-  absl::Status InlineAllInvokes(xls::Package* package);
-
   // Generate some useful metadata after either GenerateIR_Top_Function() or
   //  GenerateIR_Block() has run.
   absl::StatusOr<xlscc_metadata::MetadataOutput> GenerateMetadata();
@@ -1597,6 +1596,7 @@ class Translator {
         return_index_for_static;
     absl::flat_hash_map<const clang::NamedDecl*, xls::Param*>
         state_element_for_variable;
+    xls::BValue orig_token;
     xls::BValue token;
     bool contains_fsm = false;
   };
@@ -1655,6 +1655,7 @@ class Translator {
                                     xls::ProcBuilder& pb,
                                     const xls::SourceInfo& body_loc);
   absl::Status GenerateDefaultIOOp(xls::Channel* channel, bool is_send,
+                                   xls::BValue token,
                                    std::vector<xls::BValue>& final_tokens,
                                    xls::ProcBuilder& pb,
                                    const xls::SourceInfo& loc);

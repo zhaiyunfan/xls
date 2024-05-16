@@ -203,6 +203,7 @@ cc_library(
         "//xls/ir:format_preference",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/types:span",
     ],
 )
 
@@ -270,7 +271,6 @@ cc_test(
         ":interp_bindings",
         "//xls/common:xls_gunit_main",
         "//xls/common/status:matchers",
-        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest",
@@ -295,6 +295,7 @@ cc_library(
         ":interp_bindings",
         ":warning_kind",
         "//xls/common/status:ret_check",
+        "//xls/common/status:status_macros",
         "//xls/dslx/bytecode:bytecode_cache_interface",
         "//xls/dslx/frontend:ast",
         "//xls/dslx/frontend:module",
@@ -348,7 +349,6 @@ cc_library(
     srcs = ["mangle.cc"],
     hdrs = ["mangle.h"],
     deps = [
-        "//xls/common/status:ret_check",
         "//xls/dslx/type_system:parametric_env",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/container:btree",
@@ -538,11 +538,16 @@ cc_binary(
         "//xls/common/file:filesystem",
         "//xls/common/status:status_macros",
         "//xls/dslx/run_routines",
+        "//xls/dslx/run_routines:test_xml",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/log",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
+        "@com_googlesource_code_re2//:re2",
     ],
 )
 

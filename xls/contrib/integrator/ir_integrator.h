@@ -24,10 +24,14 @@
 #include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/types/span.h"
 #include "xls/contrib/integrator/integration_options.h"
 #include "xls/ir/function.h"
+#include "xls/ir/node.h"
 #include "xls/ir/package.h"
 
 namespace xls {

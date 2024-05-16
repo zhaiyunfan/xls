@@ -461,12 +461,15 @@ cc_library(
         "//xls/common:proto_adaptor_utils",
         "//xls/common/file:filesystem",
         "//xls/common/status:ret_check",
+        "//xls/common/status:status_macros",
         "//xls/dslx:interp_value",
         "//xls/dslx:interp_value_utils",
         "//xls/ir:ir_parser",
+        "//xls/ir:value",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:span",
         "@com_google_protobuf//:protobuf",
         "@com_googlesource_code_re2//:re2",
@@ -503,6 +506,7 @@ cc_binary(
         "//xls/common/file:temp_directory",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
     ],
@@ -523,9 +527,12 @@ cc_binary(
         "//xls/ir:type",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//:protobuf_lite",
     ],
 )
 
@@ -767,6 +774,7 @@ cc_library(
         "@com_google_absl//absl/random",
         "@com_google_absl//absl/random:bit_gen_ref",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/types:span",
     ],
 )
 
@@ -777,7 +785,6 @@ cc_test(
         ":dslx_mutator",
         "//xls/common:xls_gunit_main",
         "//xls/common/status:matchers",
-        "@com_google_absl//absl/random",
         "@com_google_absl//absl/random:mock_distributions",
         "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest",
@@ -946,11 +953,15 @@ cc_library(
     srcs = ["cpp_sample_runner.cc"],
     hdrs = ["cpp_sample_runner.h"],
     deps = [
+        "//xls/common/status:status_macros",
         "//xls/dslx:interp_value",
+        "//xls/ir:value",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/types:span",
     ],
 )
 

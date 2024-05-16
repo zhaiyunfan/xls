@@ -13,20 +13,20 @@
 // limitations under the License.
 #include "xls/modules/aes/aes_test_common.h"
 
-#include <arpa/inet.h>
-
 #include <array>
 #include <cstdint>
-#include <filesystem>
 #include <iostream>
 #include <string>
 #include <vector>
 
+#include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "xls/common/status/status_macros.h"
 #include "xls/ir/bits.h"
 #include "xls/ir/bits_ops.h"
+#include "xls/ir/value.h"
 
 namespace xls::aes {
 

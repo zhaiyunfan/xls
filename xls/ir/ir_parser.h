@@ -35,6 +35,8 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_format.h"
+#include "absl/types/span.h"
 #include "xls/common/status/status_macros.h"
 #include "xls/ir/block.h"
 #include "xls/ir/channel.h"
@@ -44,11 +46,13 @@
 #include "xls/ir/ir_scanner.h"
 #include "xls/ir/node.h"
 #include "xls/ir/nodes.h"
+#include "xls/ir/op.h"
 #include "xls/ir/package.h"
 #include "xls/ir/proc.h"
 #include "xls/ir/proc_instantiation.h"
 #include "xls/ir/register.h"
 #include "xls/ir/source_location.h"
+#include "xls/ir/value.h"
 
 namespace xls {
 
@@ -256,7 +260,6 @@ class Parser {
   absl::StatusOr<ProcInstantiation*> ParseProcInstantiation(Proc* proc);
 
   struct ProcNext {
-    BValue next_token;
     std::vector<BValue> next_state;
   };
   using BodyResult = std::variant<BValue, ProcNext>;

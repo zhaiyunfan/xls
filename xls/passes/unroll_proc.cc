@@ -18,8 +18,11 @@
 #include <optional>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
-#include "xls/common/status/ret_check.h"
+#include "xls/common/status/status_macros.h"
+#include "xls/ir/node.h"
 #include "xls/ir/nodes.h"
 #include "xls/ir/proc.h"
 #include "xls/ir/topo_sort.h"
@@ -36,7 +39,6 @@ absl::StatusOr<ProcUnrollInfo> UnrollProc(Proc* proc, int64_t num_iterations) {
     unroll_info.iteration_map[node] = 0;
   }
 
-  Node* token = proc->NextToken();
   std::vector<Node*> state_nodes(proc->NextState().begin(),
                                  proc->NextState().end());
 
@@ -64,10 +66,6 @@ absl::StatusOr<ProcUnrollInfo> UnrollProc(Proc* proc, int64_t num_iterations) {
             operands.push_back(state_nodes[param_idx.value()]);
             continue;
           }
-          if (operand == proc->TokenParam()) {
-            operands.push_back(token);
-            continue;
-          }
         }
         operands.push_back(clone_map.at(operand));
       }
@@ -75,7 +73,6 @@ absl::StatusOr<ProcUnrollInfo> UnrollProc(Proc* proc, int64_t num_iterations) {
       cloned->SetName(absl::StrFormat("%s_iter_%d", node->GetName(), iter));
       clone_map[node] = cloned;
     }
-    token = clone_map.at(proc->NextToken());
     for (int64_t i = 0; i < proc->StateParams().size(); ++i) {
       state_nodes[i] = clone_map.at(proc->NextState()[i]);
     }
@@ -92,7 +89,6 @@ absl::StatusOr<ProcUnrollInfo> UnrollProc(Proc* proc, int64_t num_iterations) {
     node->SetName(absl::StrFormat("%s_iter_0", node->GetName()));
   }
 
-  XLS_RETURN_IF_ERROR(proc->SetNextToken(token));
   for (int64_t i = 0; i < proc->StateParams().size(); ++i) {
     XLS_RETURN_IF_ERROR(proc->SetNextStateElement(i, state_nodes[i]));
   }

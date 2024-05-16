@@ -71,7 +71,6 @@ cc_library(
         "//xls/ir:value",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/log",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -102,11 +101,58 @@ cc_test(
         "//xls/ir:ir_test_base",
         "//xls/ir:value",
         "//xls/ir:value_builder",
-        "//xls/ir:xls_type_cc_proto",
         "//xls/jit:function_jit",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
+cc_library(
+    name = "extract_interface",
+    srcs = ["extract_interface.cc"],
+    hdrs = ["extract_interface.h"],
+    deps = [
+        "//xls/ir",
+        "//xls/ir:channel",
+        "//xls/ir:register",
+        "//xls/ir:xls_ir_interface_cc_proto",
+    ],
+)
+
+cc_binary(
+    name = "extract_interface_main",
+    srcs = ["extract_interface_main.cc"],
+    deps = [
+        ":extract_interface",
+        "//xls/common:exit_status",
+        "//xls/common:init_xls",
+        "//xls/common/file:filesystem",
+        "//xls/common/status:ret_check",
+        "//xls/common/status:status_macros",
+        "//xls/ir:xls_ir_interface_cc_proto",
+        "//xls/public:ir_parser",
+        "@com_google_absl//absl/flags:flag",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/status",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_test(
+    name = "extract_interface_test",
+    srcs = ["extract_interface_test.cc"],
+    deps = [
+        ":extract_interface",
+        "//xls/common:proto_test_utils",
+        "//xls/common:xls_gunit_main",
+        "//xls/common/status:matchers",
+        "//xls/ir:bits",
+        "//xls/ir:function_builder",
+        "//xls/ir:ir_test_base",
+        "//xls/ir:source_location",
+        "//xls/ir:xls_ir_interface_cc_proto",
         "@com_google_googletest//:gtest",
     ],
 )
@@ -193,7 +239,6 @@ cc_binary(
         "//xls/common:exit_status",
         "//xls/common:init_xls",
         "//xls/common/file:filesystem",
-        "//xls/common/status:ret_check",
         "//xls/common/status:status_macros",
         "//xls/ir:ir_parser",
         "@com_google_absl//absl/flags:flag",
@@ -273,6 +318,7 @@ cc_binary(
         "//xls/common/status:status_macros",
         "//xls/ir",
         "//xls/ir:ir_parser",
+        "//xls/ir:op",
         "//xls/ir:type",
         "//xls/netlist",
         "//xls/netlist:cell_library",
@@ -316,6 +362,7 @@ cc_binary(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
     ],
 )
 
@@ -345,14 +392,6 @@ cc_library(
     srcs = ["proto_to_dslx.cc"],
     hdrs = ["proto_to_dslx.h"],
     deps = [
-        "@com_google_absl//absl/container:btree",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/container:flat_hash_set",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        # protobuf compiler import
         "//xls/common:proto_adaptor_utils",
         "//xls/common/file:filesystem",
         "//xls/common/file:temp_directory",
@@ -362,7 +401,17 @@ cc_library(
         "//xls/dslx/frontend:ast_utils",
         "//xls/dslx/frontend:module",
         "//xls/dslx/frontend:pos",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/types:span",
         "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//src/google/protobuf/compiler:importer",
     ],
 )
 
@@ -375,10 +424,11 @@ cc_binary(
         "//xls/common:exit_status",
         "//xls/common:init_xls",
         "//xls/common/file:filesystem",
+        "//xls/common/status:status_macros",
         "//xls/dslx/frontend:module",
         "@com_google_absl//absl/flags:flag",
+        "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
-        "@com_google_protobuf//:protobuf",
     ],
 )
 
@@ -392,9 +442,7 @@ cc_test(
         "//xls/common/file:temp_directory",
         "//xls/common/file:temp_file",
         "//xls/common/status:matchers",
-        "//xls/common/status:status_macros",
         "//xls/dslx/frontend:module",
-        "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest",
     ],
 )
@@ -478,8 +526,12 @@ cc_binary(
         "//xls/common:init_xls",
         "//xls/common/file:filesystem",
         "//xls/common/status:status_macros",
+        "//xls/ir",
         "//xls/ir:ir_parser",
+        "//xls/ir:verifier",
+        "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/types:span",
     ],
 )
 
@@ -609,6 +661,7 @@ cc_test(
     deps = [
         ":eval_utils",
         ":proc_channel_values_cc_proto",
+        "//xls/common:proto_test_utils",
         "//xls/common:xls_gunit_main",
         "//xls/common/status:matchers",
         "//xls/ir:bits",
@@ -697,7 +750,6 @@ cc_binary(
         "//xls/common:init_xls",
         "//xls/common/file:filesystem",
         "//xls/common/status:status_macros",
-        "//xls/ir:ram_rewrite_cc_proto",
         "//xls/passes:optimization_pass",
         "//xls/passes:optimization_pass_pipeline",
         "@com_google_absl//absl/cleanup",
@@ -914,15 +966,11 @@ cc_binary(
     # Only for the genrule and xls-stuff to generate protos.
     visibility = ["//xls:xls_internal"],
     deps = [
-        ":codegen",
         ":codegen_flags",
-        ":codegen_flags_cc_proto",
         ":scheduling_options_flags",
-        ":scheduling_options_flags_cc_proto",
         "//xls/common:exit_status",
         "//xls/common:init_xls",
         "//xls/common/status:status_macros",
-        "//xls/scheduling:pipeline_schedule_cc_proto",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
@@ -936,7 +984,6 @@ cc_library(
     deps = [
         ":scheduling_options_flags_cc_proto",
         "//xls/common/file:filesystem",
-        "//xls/common/status:ret_check",
         "//xls/common/status:status_macros",
         "//xls/delay_model:delay_estimator",
         "//xls/delay_model:delay_estimators",
@@ -948,7 +995,6 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
-        "@com_google_protobuf//:protobuf",
     ],
 )
 
@@ -977,13 +1023,11 @@ cc_library(
     deps = [
         ":codegen_flags_cc_proto",
         "//xls/common/file:filesystem",
-        "//xls/common/status:ret_check",
         "//xls/common/status:status_macros",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:str_format",
-        "@com_google_protobuf//:protobuf",
     ],
 )
 
@@ -1015,7 +1059,6 @@ cc_library(
         "//xls/scheduling:scheduling_options",
         "//xls/scheduling:scheduling_pass",
         "//xls/scheduling:scheduling_pass_pipeline",
-        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
@@ -1068,12 +1111,14 @@ cc_binary(
         "//xls/ir:ir_parser",
         "//xls/ir:value",
         "//xls/simulation:module_simulator",
+        "//xls/simulation:verilog_simulator",
         "//xls/simulation:verilog_simulators",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -1292,9 +1337,12 @@ cc_binary(
         "//xls/passes:bdd_function",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/time",
+        "@com_google_absl//absl/types:span",
     ],
 )
 

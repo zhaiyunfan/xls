@@ -129,7 +129,6 @@ cc_library(
         "//xls/ir",
         "//xls/scheduling:pipeline_schedule",
         "//xls/scheduling:scheduling_options",
-        "//xls/synthesis:synthesis_cc_proto",
     ],
 )
 
@@ -153,7 +152,6 @@ cc_library(
     srcs = ["yosys_synthesizer.cc"],
     hdrs = ["yosys_synthesizer.h"],
     deps = [
-        ":extract_nodes",
         ":synthesizer",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/log:check",
@@ -164,7 +162,6 @@ cc_library(
         "//xls/common/status:status_macros",
         "//xls/ir",
         "//xls/scheduling:scheduling_options",
-        "//xls/synthesis:synthesis_cc_proto",
         "//xls/synthesis/yosys:yosys_synthesis_service",
     ],
     alwayslink = True,  # Always link because it has a module-level initialization that registers the synthesizer.

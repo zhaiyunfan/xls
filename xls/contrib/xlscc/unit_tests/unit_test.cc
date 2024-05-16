@@ -40,6 +40,7 @@
 #include "absl/strings/match.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
+#include "absl/types/span.h"
 #include "clang/include/clang/AST/Decl.h"
 #include "xls/common/file/get_runfile_path.h"
 #include "xls/common/source_location.h"
@@ -52,7 +53,9 @@
 #include "xls/interpreter/interpreter_proc_runtime.h"
 #include "xls/interpreter/serial_proc_runtime.h"
 #include "xls/ir/events.h"
+#include "xls/ir/node.h"
 #include "xls/ir/nodes.h"
+#include "xls/ir/op.h"
 #include "xls/ir/package.h"
 #include "xls/ir/proc.h"
 #include "xls/ir/source_location.h"
@@ -663,17 +666,21 @@ absl::StatusOr<bool> XlsccTestBase::NodeIsAfterTokenWise(xls::Proc* proc,
                                                          xls::Node* after) {
   absl::flat_hash_set<xls::Node*> tokens_after = {after};
 
-  while (!tokens_after.contains(proc->TokenParam())) {
+  while (true) {
     // Don't change the set while iterating through it
     absl::flat_hash_set<xls::Node*> next_tokens_after = {};
     for (xls::Node* node_after : tokens_after) {
       XLS_RETURN_IF_ERROR(TokensForNode(node_after, next_tokens_after));
     }
-    tokens_after = next_tokens_after;
 
-    if (tokens_after.contains(before)) {
+    if (tokens_after == next_tokens_after) {
+      // We've found all the predecessors, and `before` isn't one of them.
+      return false;
+    }
+    if (next_tokens_after.contains(before)) {
       return true;
     }
+    tokens_after = std::move(next_tokens_after);
   }
 
   return false;

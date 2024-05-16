@@ -40,6 +40,7 @@
 #include "xls/data_structures/inline_bitmap.h"
 #include "xls/data_structures/leaf_type_tree.h"
 #include "xls/data_structures/union_find.h"
+#include "xls/ir/bits.h"
 #include "xls/ir/op.h"
 #include "xls/ir/proc.h"
 #include "xls/ir/source_location.h"
@@ -170,9 +171,6 @@ class StateDependencyVisitor : public DataflowVisitor<InlineBitmap> {
   }
 
   absl::Status HandleParam(Param* param) override {
-    if (param == proc_->TokenParam()) {
-      return DefaultHandler(param);
-    }
     // A state parameter is only dependent upon itself.
     XLS_ASSIGN_OR_RETURN(int64_t index, proc_->GetStateParamIndex(param));
     InlineBitmap bitmap(proc_->GetStateElementCount());

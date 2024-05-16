@@ -59,6 +59,7 @@ cc_test(
         ":graph_contraction",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/types:variant",
         "//xls/common:xls_gunit_main",
         "@com_google_googletest//:gtest",
     ],
@@ -108,6 +109,7 @@ cc_test(
         ":maximum_clique",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/random:distributions",
+        "@com_google_absl//absl/strings:str_format",
         "//xls/common:xls_gunit_main",
         "@com_google_googletest//:gtest",
     ],
@@ -228,7 +230,6 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:span",
         "//xls/common:strong_int",
-        "//xls/common/logging:log_lines",
     ],
 )
 
@@ -312,12 +313,7 @@ cc_test(
     srcs = ["algorithm_test.cc"],
     deps = [
         ":algorithm",
-        "@com_google_absl//absl/memory",
-        "@com_google_absl//absl/strings:str_format",
         "//xls/common:xls_gunit_main",
-        "//xls/ir",
-        "//xls/ir:function_builder",
-        "//xls/ir:ir_test_base",
         "@com_google_googletest//:gtest",
     ],
 )
@@ -327,12 +323,10 @@ cc_test(
     srcs = ["binary_decision_diagram_test.cc"],
     deps = [
         ":binary_decision_diagram",
-        "@com_google_absl//absl/container:inlined_vector",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log",
         "//xls/common:xls_gunit_main",
         "//xls/common/status:matchers",
-        "//xls/ir:bits",
-        "//xls/ir:format_preference",
         "@com_google_googletest//:gtest",
     ],
 )
@@ -363,6 +357,7 @@ cc_test(
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/types:span",
         "//xls/common:strong_int",
         "//xls/common:xls_gunit_main",
         "@com_google_googletest//:gtest",

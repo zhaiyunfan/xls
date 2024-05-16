@@ -14,11 +14,11 @@
 
 #include "xls/noc/config_ng/network_component_utils.h"
 
-#include <queue>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "xls/common/status/ret_check.h"
 #include "xls/common/status/status_macros.h"

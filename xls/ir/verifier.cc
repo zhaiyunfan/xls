@@ -25,7 +25,6 @@
 #include <variant>
 #include <vector>
 
-#include "absl/algorithm/container.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/log/log.h"
@@ -38,10 +37,8 @@
 #include "absl/types/span.h"
 #include "xls/common/casts.h"
 #include "xls/common/logging/log_lines.h"
-#include "xls/common/math_util.h"
 #include "xls/common/status/ret_check.h"
 #include "xls/common/status/status_macros.h"
-#include "xls/ir/bits.h"
 #include "xls/ir/block.h"
 #include "xls/ir/block_elaboration.h"
 #include "xls/ir/caret.h"
@@ -50,7 +47,6 @@
 #include "xls/ir/dfs_visitor.h"
 #include "xls/ir/elaborated_block_dfs_visitor.h"
 #include "xls/ir/fileno.h"
-#include "xls/ir/format_strings.h"
 #include "xls/ir/function.h"
 #include "xls/ir/function_base.h"
 #include "xls/ir/instantiation.h"
@@ -633,20 +629,14 @@ absl::Status VerifyProc(Proc* proc, bool codegen) {
     XLS_RETURN_IF_ERROR(VerifyProcInstantiations(proc));
   }
 
-  // A Proc has a single token parameter and zero or more state parameters.
-  XLS_RET_CHECK_EQ(proc->params().size(), proc->GetStateElementCount() + 1);
-
-  XLS_RET_CHECK_EQ(proc->param(0), proc->TokenParam());
-  XLS_RET_CHECK_EQ(proc->param(0)->GetType(), proc->package()->GetTokenType())
-      << absl::StreamFormat("Parameter 0 of a proc %s is not token type, is %s",
-                            proc->name(),
-                            proc->param(1)->GetType()->ToString());
+  // A Proc has zero or more state parameters, which may be tokens.
+  XLS_RET_CHECK_EQ(proc->params().size(), proc->GetStateElementCount());
 
   XLS_RET_CHECK_EQ(proc->GetStateElementCount(), proc->InitValues().size());
   XLS_RET_CHECK_EQ(proc->GetStateElementCount(), proc->NextState().size());
   for (int64_t i = 0; i < proc->GetStateElementCount(); ++i) {
     // Verify that the order of parameters matches the state element order.
-    XLS_RET_CHECK_EQ(proc->param(i + 1), proc->GetStateParam(i));
+    XLS_RET_CHECK_EQ(proc->param(i), proc->GetStateParam(i));
 
     Param* param = proc->GetStateParam(i);
     Node* next_state = proc->GetNextStateElement(i);
@@ -676,14 +666,6 @@ absl::Status VerifyProc(Proc* proc, bool codegen) {
     XLS_RET_CHECK(ValueConformsToType(proc->GetInitValueElement(i),
                                       proc->GetStateParam(i)->GetType()));
   }
-
-  // Next token must be token type.
-  XLS_RET_CHECK(proc->NextToken()->GetType()->IsToken());
-
-  // Verify that all side-effecting operations which produce tokens are
-  // connected to the token parameter and the return value via paths of tokens.
-  XLS_RETURN_IF_ERROR(
-      VerifyTokenConnectivity(proc->TokenParam(), proc->NextToken(), proc));
 
   return absl::OkStatus();
 }
@@ -863,10 +845,10 @@ static absl::Status VerifyExternInstantiation(
 
 static absl::Status VerifyFifoInstantiation(Package* package,
                                             FifoInstantiation* instantiation) {
-  if (instantiation->fifo_config().depth < 0) {
+  if (instantiation->fifo_config().depth() < 0) {
     return absl::InvalidArgumentError(
         absl::StrFormat("Expected fifo depth >= 0, got %d",
-                        instantiation->fifo_config().depth));
+                        instantiation->fifo_config().depth()));
   }
   if (instantiation->channel_name().has_value()) {
     XLS_ASSIGN_OR_RETURN(Channel * channel,

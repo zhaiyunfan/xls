@@ -23,10 +23,15 @@
 #include <variant>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/log/check.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/str_replace.h"
+#include "absl/types/span.h"
 #include "xls/codegen/vast.h"
 #include "xls/common/status/status_macros.h"
+#include "xls/ir/node.h"
 #include "re2/re2.h"
 
 namespace xls::verilog {

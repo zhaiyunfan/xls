@@ -22,9 +22,10 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/status/status.h"
+#include "xls/codegen/name_to_bit_count.h"
 #include "xls/codegen/vast.h"
 #include "xls/common/status/matchers.h"
-#include "xls/simulation/verilog_simulators.h"
+#include "xls/ir/bits.h"
 #include "xls/simulation/verilog_test_base.h"
 
 namespace xls {

@@ -20,8 +20,12 @@
 #include <list>
 #include <memory>
 
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/types/span.h"
 #include "xls/contrib/integrator/integration_algorithms/integration_algorithm.h"
+#include "xls/ir/node.h"
 
 namespace xls {
 
