@@ -1,0 +1,13 @@
+package my_package
+
+file_number 1 "././example/test.cc"
+
+top fn add3(input: bits[32]) -> bits[32] {
+  literal.5: bits[1] = literal(value=1, id=5, pos=[(1,2,23)])
+  literal.2: bits[32] = literal(value=3, id=2, pos=[(1,2,23)])
+  literal.4: bits[1] = literal(value=1, id=4)
+  not.6: bits[1] = not(literal.5, id=6, pos=[(1,2,23)])
+  not.7: bits[1] = not(literal.5, id=7, pos=[(1,2,1)])
+  ret add.3: bits[32] = add(input, literal.2, id=3, pos=[(1,2,23)])
+}
+
