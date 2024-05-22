@@ -31,14 +31,17 @@
 #include "absl/strings/str_format.h"
 #include "absl/types/span.h"
 #include "xls/codegen/module_signature.pb.h"
+#include "xls/codegen/xls_metrics.pb.h"
 #include "xls/common/proto_adaptor_utils.h"
 #include "xls/common/status/status_macros.h"
 #include "xls/ir/bits.h"
 #include "xls/ir/channel.h"
+#include "xls/ir/channel.pb.h"
 #include "xls/ir/channel_ops.h"
 #include "xls/ir/package.h"
 #include "xls/ir/type.h"
 #include "xls/ir/value.h"
+#include "xls/ir/xls_type.pb.h"
 
 namespace xls {
 namespace verilog {

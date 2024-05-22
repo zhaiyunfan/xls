@@ -15,6 +15,10 @@
 package(
     default_applicable_licenses = ["//:license"],
     default_visibility = ["//xls:xls_internal"],
+    features = [
+        "layering_check",
+        "parse_headers",
+    ],
     licenses = ["notice"],  # Apache 2.0
 )
 
@@ -49,9 +53,12 @@ cc_library(
         "//xls/ir:bits_ops",
         "//xls/ir:block_elaboration",
         "//xls/ir:events",
+        "//xls/ir:format_preference",
+        "//xls/ir:format_strings",
         "//xls/ir:keyword_args",
         "//xls/ir:op",
         "//xls/ir:register",
+        "//xls/ir:type",
         "//xls/ir:value",
         "//xls/ir:value_utils",
     ],
@@ -100,6 +107,7 @@ cc_test(
         "//xls/common/status:matchers",
         "//xls/ir",
         "//xls/ir:bits",
+        "//xls/ir:events",
         "//xls/ir:function_builder",
         "//xls/ir:ir_parser",
         "//xls/ir:ir_test_base",
@@ -129,6 +137,7 @@ cc_library(
         "//xls/ir:bits",
         "//xls/ir:elaboration",
         "//xls/ir:events",
+        "//xls/ir:proc_elaboration",
         "//xls/ir:value",
         "//xls/ir:value_utils",
     ],
@@ -164,6 +173,7 @@ cc_test(
         "//xls/ir:channel",
         "//xls/ir:channel_ops",
         "//xls/ir:ir_test_base",
+        "//xls/ir:proc_elaboration",
         "@com_google_googletest//:gtest",
     ],
 )
@@ -319,6 +329,7 @@ cc_library(
         "//xls/ir:channel_ops",
         "//xls/ir:elaboration",
         "//xls/ir:ir_test_base",
+        "//xls/ir:proc_elaboration",
         "//xls/ir:value",
         "@com_google_googletest//:gtest",
     ],
@@ -356,6 +367,7 @@ cc_library(
         "//xls/ir:channel_ops",
         "//xls/ir:function_builder",
         "//xls/ir:ir_test_base",
+        "//xls/ir:proc_elaboration",
         "//xls/ir:value",
         "@com_google_googletest//:gtest",
     ],
@@ -380,6 +392,7 @@ cc_library(
         "//xls/ir:channel_ops",
         "//xls/ir:elaboration",
         "//xls/ir:events",
+        "//xls/ir:proc_elaboration",
         "//xls/ir:value",
         "//xls/jit:jit_channel_queue",
     ],
@@ -395,6 +408,7 @@ cc_library(
         ":proc_runtime",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log",
+        "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:str_format",
         "//xls/common/status:ret_check",
@@ -402,6 +416,7 @@ cc_library(
         "//xls/ir",
         "//xls/ir:elaboration",
         "//xls/ir:events",
+        "//xls/ir:proc_elaboration",
     ],
 )
 
@@ -417,6 +432,7 @@ cc_test(
         ":proc_runtime",
         ":proc_runtime_test_base",
         ":serial_proc_runtime",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "//xls/common:xls_gunit_main",
         "//xls/common/file:filesystem",
@@ -425,6 +441,7 @@ cc_test(
         "//xls/common/status:status_macros",
         "//xls/ir",
         "//xls/ir:ir_parser",
+        "//xls/ir:proc_elaboration",
         "//xls/ir:value",
         "//xls/jit:jit_channel_queue",
         "//xls/jit:jit_proc_runtime",
@@ -471,6 +488,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "//xls/common/status:status_macros",
         "//xls/ir",
+        "//xls/ir:proc_elaboration",
         "//xls/ir:value",
     ],
 )

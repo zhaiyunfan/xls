@@ -107,10 +107,10 @@ TEST(TypecheckErrorTest, ParametricWrongArgCount) {
 fn id<N: u32>(x: bits[N]) -> bits[N] { x }
 fn f() -> u32 { id(u8:3, u8:4) }
 )";
-  EXPECT_THAT(
-      Typecheck(text),
-      StatusIs(absl::StatusCode::kInvalidArgument,
-               HasSubstr("Expected 1 parameter(s) but got 2 argument(s)")));
+  EXPECT_THAT(Typecheck(text),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Expected 1 parameter(s) for function id, but "
+                                 "got 2 argument(s)")));
 }
 
 TEST(TypecheckErrorTest, ParametricTooManyExplicitSupplied) {
@@ -992,6 +992,62 @@ fn f() -> u32[3] {
 )"));
 }
 
+TEST(TypecheckTest, UpdateBuiltin2D) {
+  XLS_EXPECT_OK(Typecheck(R"(
+fn f() -> u32[2][3] {
+  let x: u32[2][3] = u32[2][3]:[[u32:0,u32:1], [u32:2,u32:3], [u32:3,u32:4]];
+  update(x, (u1:0, u32:1), u32:3)
+}
+)"));
+}
+
+TEST(TypecheckTest, UpdateBuiltinNotAnIndex) {
+  EXPECT_THAT(
+      Typecheck(R"(
+fn f() -> u32[2][3] {
+  let x: u32[2][3] = u32[2][3]:[[u32:0,u32:1], [u32:2,u32:3], [u32:3,u32:4]];
+  update(x, [u32:0, u32:1], u32:3)
+}
+)"),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("Need index to be either a uN or a tuple of uN's")));
+}
+
+TEST(TypecheckTest, UpdateBuiltinOutOfDimensions) {
+  EXPECT_THAT(
+      Typecheck(R"(
+fn f() -> u32[2][3] {
+  let x: u32[2][3] = u32[2][3]:[[u32:0,u32:1], [u32:2,u32:3], [u32:3,u32:4]];
+  update(x, (u1:0, u32:1, u32:2), u32:3)
+}
+)"),
+      StatusIs(
+          absl::StatusCode::kInvalidArgument,
+          HasSubstr(
+              "Want argument 0 type uN[32][2][3] dimensions: 2 to be larger")));
+}
+
+TEST(TypecheckTest, UpdateBuiltinTypeMissmatch) {
+  EXPECT_THAT(
+      Typecheck(R"(
+fn f() -> u32[2][3] {
+  let x: u32[2][3] = u32[2][3]:[[u32:0,u32:1], [u32:2,u32:3], [u32:3,u32:4]];
+  update(x, (u1:0, u32:1), u8:3)
+}
+)"),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("Want argument 0 element type uN[32] to match")));
+}
+
+TEST(TypecheckTest, UpdateBuiltinEmptyIndex) {
+  XLS_EXPECT_OK(Typecheck(R"(
+fn f() -> u32[2][3] {
+  let x: u32[2][3] = u32[2][3]:[[u32:0,u32:1], [u32:2,u32:3], [u32:3,u32:4]];
+  update(x, (), u32[2][3]:[[u32:0,u32:1], [u32:2,u32:3], [u32:3,u32:4]])
+}
+)"));
+}
+
 TEST(TypecheckTest, SliceBuiltin) {
   XLS_EXPECT_OK(Typecheck(R"(
 fn f() -> u32[3] {
@@ -1084,16 +1140,6 @@ fn f(x: u32[5]) -> u32[5] {
 )"),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("uN[32] to match argument 2 type uN[8]")));
-}
-
-TEST(TypecheckErrorTest, UpdateMultidimIndex) {
-  EXPECT_THAT(Typecheck(R"(
-fn f(x: u32[6][5], i: u32[2]) -> u32[6][5] {
-  update(x, i, u32[6]:[0, ...])
-}
-)"),
-              StatusIs(absl::StatusCode::kInvalidArgument,
-                       HasSubstr("Want argument 1 to be unsigned bits")));
 }
 
 TEST(TypecheckTest, MissingAnnotation) {
@@ -2428,8 +2474,8 @@ proc t {
 
     init {  }
 
-    next(tok: token, state: ()) {
-        let (ok, result) = map(tok, result_in);
+    next(state: ()) {
+        let (ok, result) = map(join(), result_in);
     }
 }
 )")

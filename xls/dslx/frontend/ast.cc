@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <climits>
+#include <cstddef>
 #include <cstdint>
 #include <deque>
 #include <optional>
@@ -50,6 +51,7 @@
 #include "xls/dslx/frontend/token_utils.h"
 #include "xls/ir/bits.h"
 #include "xls/ir/bits_ops.h"
+#include "xls/ir/format_preference.h"
 #include "xls/ir/format_strings.h"
 #include "xls/ir/number_parser.h"
 
@@ -526,7 +528,7 @@ const absl::btree_set<BinopKind>& GetBinopShifts() {
 
 std::string BinopKindFormat(BinopKind kind) {
   switch (kind) {
-    // clang-format off
+      // clang-format off
     // Shifts.
     case BinopKind::kShl:       return "<<";
     case BinopKind::kShr:       return ">>";
@@ -1600,7 +1602,8 @@ std::vector<AstNode*> For::GetChildren(bool want_types) const {
 Function::Function(Module* owner, Span span, NameDef* name_def,
                    std::vector<ParametricBinding*> parametric_bindings,
                    std::vector<Param*> params, TypeAnnotation* return_type,
-                   Block* body, FunctionTag tag, bool is_public)
+                   Block* body, FunctionTag tag, bool is_public,
+                   bool has_implicit_token_param)
     : AstNode(owner),
       span_(std::move(span)),
       name_def_(name_def),
@@ -1609,7 +1612,9 @@ Function::Function(Module* owner, Span span, NameDef* name_def,
       return_type_(return_type),
       body_(body),
       tag_(tag),
-      is_public_(is_public) {
+      is_public_(is_public),
+      has_implicit_token_param_(has_implicit_token_param) {
+  CHECK(!has_implicit_token_param || tag == FunctionTag::kProcNext);
   for (const ParametricBinding* pb : parametric_bindings_) {
     CHECK(parametric_keys_.insert(pb->identifier()).second);
   }
@@ -2162,11 +2167,12 @@ std::vector<AstNode*> Statement::GetChildren(bool want_types) const {
   return {ToAstNode(wrapped_)};
 }
 
-Span ExprOrTypeSpan(const ExprOrType &expr_or_type) {
+Span ExprOrTypeSpan(const ExprOrType& expr_or_type) {
   return absl::visit(Visitor{
-    [](Expr* expr) { return expr->span(); },
-    [](TypeAnnotation* type) { return type->span(); },
-  }, expr_or_type);
+                         [](Expr* expr) { return expr->span(); },
+                         [](TypeAnnotation* type) { return type->span(); },
+                     },
+                     expr_or_type);
 }
 
 }  // namespace xls::dslx

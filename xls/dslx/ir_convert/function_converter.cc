@@ -43,6 +43,7 @@
 #include "xls/common/visitor.h"
 #include "xls/dslx/constexpr_evaluator.h"
 #include "xls/dslx/frontend/ast.h"
+#include "xls/dslx/frontend/ast_node.h"
 #include "xls/dslx/frontend/ast_utils.h"
 #include "xls/dslx/frontend/builtins_metadata.h"
 #include "xls/dslx/frontend/pos.h"
@@ -2359,10 +2360,10 @@ absl::Status FunctionConverter::HandleProcNextFunction(
   }
 
   auto builder = std::make_unique<ProcBuilder>(mangled_name, package());
-  auto entry_token = builder->Literal(Value::Token(), SourceInfo(), token_name);
+  auto implicit_token =
+      builder->Literal(Value::Token(), SourceInfo(), token_name);
   builder->StateElement(state_name, initial_element);
-  tokens_.push_back(entry_token);
-  SetNodeToIr(f->params()[0]->name_def(), entry_token);
+  tokens_.push_back(implicit_token);
   auto* builder_ptr = builder.get();
   SetFunctionBuilder(std::move(builder));
   // Proc is a top entity.
@@ -2370,21 +2371,25 @@ absl::Status FunctionConverter::HandleProcNextFunction(
     XLS_RETURN_IF_ERROR(builder_ptr->SetAsTop());
   }
 
-  // "next" functions actually have _explicit_ tokens. We can unconditionally
-  // hook into the implicit token stuff in case any downstream functions need
-  // it.
+  // We make an implicit token in case any downstream functions need it; if it's
+  // unused, it'll be optimized out later.
   implicit_token_data_ = ImplicitTokenData{
-      .entry_token = entry_token,
+      .entry_token = implicit_token,
       .activated = builder_ptr->Literal(Value::Bool(true)),
       .create_control_predicate =
           [this]() { return implicit_token_data_->activated; },
   };
 
-  // Now bind the recurrent state element.
-  // We need to shift indices by one to handle the token arg.
-  if (f->params().size() == 2) {
-    BValue state = builder_ptr->GetStateParam(0);
+  // Bind the recurrent state element (and the implicit token param, if any).
+  BValue state = builder_ptr->GetStateParam(0);
+  if (f->has_implicit_token_param()) {
+    XLS_RET_CHECK_EQ(f->params().size(), 2);
+    SetNodeToIr(f->params()[0]->name_def(), implicit_token);
     SetNodeToIr(f->params()[1]->name_def(), state);
+  } else {
+    XLS_RET_CHECK_EQ(f->params().size(), 1);
+    // Bind the recurrent state element.
+    SetNodeToIr(f->params()[0]->name_def(), state);
   }
 
   proc_id_ = proc_id;
@@ -3148,10 +3153,19 @@ absl::Status FunctionConverter::HandleBuiltinSMulp(const Invocation* node) {
 absl::Status FunctionConverter::HandleBuiltinUpdate(const Invocation* node) {
   XLS_RET_CHECK_EQ(node->args().size(), 3);
   XLS_ASSIGN_OR_RETURN(BValue arg, Use(node->args()[0]));
-  XLS_ASSIGN_OR_RETURN(BValue index, Use(node->args()[1]));
+  std::vector<BValue> indices;
+  if (node->args()[1]->kind() == AstNodeKind::kXlsTuple) {
+    for (auto c : node->args()[1]->GetChildren(false)) {
+      XLS_ASSIGN_OR_RETURN(BValue index, Use(c));
+      indices.push_back(index);
+    }
+  } else {
+    XLS_ASSIGN_OR_RETURN(BValue index, Use(node->args()[1]));
+    indices.push_back(index);
+  }
   XLS_ASSIGN_OR_RETURN(BValue new_value, Use(node->args()[2]));
   Def(node, [&](const SourceInfo& loc) {
-    return function_builder_->ArrayUpdate(arg, new_value, {index}, loc);
+    return function_builder_->ArrayUpdate(arg, new_value, indices, loc);
   });
   return absl::OkStatus();
 }
@@ -3335,6 +3349,8 @@ absl::StatusOr<Value> InterpValueToValue(const InterpValue& iv) {
       }
       return Value::Array(ir_values);
     }
+    case InterpValueTag::kToken:
+      return Value::Token();
     default:
       return absl::InvalidArgumentError(
           "Cannot convert interpreter value with tag: " +

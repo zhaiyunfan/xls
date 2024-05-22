@@ -15,6 +15,7 @@
 #include "xls/dslx/interp_value.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <memory>
@@ -36,6 +37,9 @@
 #include "xls/common/status/ret_check.h"
 #include "xls/common/status/status_macros.h"
 #include "xls/data_structures/inline_bitmap.h"
+#include "xls/dslx/dslx_builtins.h"
+#include "xls/dslx/frontend/ast.h"
+#include "xls/dslx/value_format_descriptor.h"
 #include "xls/ir/bits.h"
 #include "xls/ir/bits_ops.h"
 #include "xls/ir/format_preference.h"
@@ -564,8 +568,7 @@ absl::StatusOr<InterpValue> InterpValue::Slice(
   XLS_ASSIGN_OR_RETURN(const auto* length_values, length.GetValues());
   int64_t length_value = length_values->size();
   XLS_ASSIGN_OR_RETURN(int64_t start_width, start.GetBitCount());
-  int64_t width = start_width +
-                  Bits::MinBitCountSigned(length_value) +
+  int64_t width = start_width + Bits::MinBitCountSigned(length_value) +
                   Bits::MinBitCountUnsigned(subject.size()) + 1;
   std::vector<InterpValue> result;
   for (int64_t i = 0; i < length_value; ++i) {
@@ -607,18 +610,33 @@ absl::StatusOr<InterpValue> InterpValue::Index(const InterpValue& other) const {
 
 absl::StatusOr<InterpValue> InterpValue::Update(
     const InterpValue& index, const InterpValue& value) const {
-  XLS_RET_CHECK(index.IsUBits());
-  XLS_ASSIGN_OR_RETURN(const std::vector<InterpValue>* lhs, GetValues());
-  XLS_ASSIGN_OR_RETURN(Bits index_bits, index.GetBits());
-  XLS_ASSIGN_OR_RETURN(uint64_t index_value, index_bits.ToUint64());
-  if (index_value >= lhs->size()) {
-    return absl::InvalidArgumentError(
-        absl::StrFormat("Update index %d is out of bounds; subject size: %d",
-                        index_value, lhs->size()));
+  absl::Span<const xls::dslx::InterpValue> indices;
+  if (index.IsTuple()) {
+    indices =
+        absl::MakeConstSpan(std::get<std::vector<InterpValue>>(index.payload_));
+  } else {
+    indices = absl::MakeConstSpan(&index, 1);
   }
-  std::vector<InterpValue> copy = *lhs;
-  copy[index_value] = value;
-  return InterpValue(tag_, std::move(copy));
+  InterpValue copy = *this;
+  InterpValue* element = &copy;
+  for (const auto& i : indices) {
+    if (!element->IsArray()) {
+      return absl::InvalidArgumentError(absl::StrFormat(
+          "Update of non-array element: %s", element->ToString()));
+    }
+    std::vector<InterpValue>& values =
+        std::get<std::vector<InterpValue>>(element->payload_);
+    XLS_ASSIGN_OR_RETURN(Bits index_bits, i.GetBits());
+    XLS_ASSIGN_OR_RETURN(uint64_t index_value, index_bits.ToUint64());
+    if (index_value >= values.size()) {
+      return absl::InvalidArgumentError(
+          absl::StrFormat("Update index %d is out of bounds; subject size: %d",
+                          index_value, values.size()));
+    }
+    element = &values[index_value];
+  }
+  *element = value;
+  return copy;
 }
 
 absl::StatusOr<InterpValue> InterpValue::ArithmeticNegate() const {
@@ -712,8 +730,8 @@ absl::StatusOr<InterpValue> InterpValue::Decode(int64_t new_bit_count) const {
   if (!unsigned_index.ok() ||
       *unsigned_index >
           static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
-    // Index cannot be represented in a 64-bit signed integer - so it's telling
-    // us to set a bit that's definitely out of range. Return 0.
+    // Index cannot be represented in a 64-bit signed integer - so it's
+    // telling us to set a bit that's definitely out of range. Return 0.
     return InterpValue(InterpValueTag::kUBits, Bits(new_bit_count));
   }
 

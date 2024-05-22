@@ -19,6 +19,10 @@
 package(
     default_applicable_licenses = ["//:license"],
     default_visibility = ["//xls:xls_internal"],
+    features = [
+        "layering_check",
+        "parse_headers",
+    ],
     licenses = ["notice"],  # Apache 2.0
 )
 
@@ -103,7 +107,6 @@ cc_test(
         ":proc_config_ir_converter",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings",
         "//xls/common:casts",
         "//xls/common:xls_gunit_main",
         "//xls/common/status:matchers",
@@ -190,6 +193,7 @@ cc_library(
         "//xls/dslx:mangle",
         "//xls/dslx:warning_collector",
         "//xls/dslx/frontend:ast",
+        "//xls/dslx/frontend:ast_node",
         "//xls/dslx/frontend:ast_utils",
         "//xls/dslx/frontend:builtins_metadata",
         "//xls/dslx/frontend:pos",
@@ -315,6 +319,7 @@ cc_test(
         "//xls/dslx:create_import_data",
         "//xls/dslx:interp_value",
         "//xls/dslx:parse_and_typecheck",
+        "//xls/dslx/frontend:ast",
         "//xls/dslx/frontend:proc",
         "//xls/dslx/type_system:parametric_env",
         "@com_google_googletest//:gtest",

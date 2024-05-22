@@ -17,6 +17,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -31,8 +32,10 @@
 #include "xls/ir/events.h"
 #include "xls/ir/function.h"
 #include "xls/ir/value.h"
+#include "xls/jit/aot_entrypoint.pb.h"
 #include "xls/jit/function_base_jit.h"
 #include "xls/jit/jit_buffer.h"
+#include "xls/jit/jit_callbacks.h"
 #include "xls/jit/jit_runtime.h"
 #include "xls/jit/observer.h"
 #include "xls/jit/orc_jit.h"
@@ -59,10 +62,17 @@ class FunctionJit {
       Function* xls_function, int64_t opt_level = 3,
       JitObserver* observer = nullptr);
 
+  // Returns an object containing an AOT-compiled version of the specified XLS
+  // function.
+  static absl::StatusOr<std::unique_ptr<FunctionJit>> CreateFromAot(
+      Function* xls_function, const AotEntrypointProto& entrypoint,
+      JitFunctionType function_unpacked,
+      std::optional<JitFunctionType> function_packed = std::nullopt);
+
   // Returns the bytes of an object file containing the compiled XLS function.
-  static absl::StatusOr<JitObjectCode> CreateObjectCode(
-      Function* xls_function, int64_t opt_level = 3,
-      JitObserver* observer = nullptr);
+  static absl::StatusOr<JitObjectCode> CreateObjectCode(Function* xls_function,
+                                                        int64_t opt_level,
+                                                        bool include_msan);
 
   // Executes the compiled function with the specified arguments.
   absl::StatusOr<InterpreterResult<Value>> Run(absl::Span<const Value> args);
@@ -118,7 +128,7 @@ class FunctionJit {
     uint8_t* output_buffers[1] = {result_buffer};
     jitted_function_base_.RunPackedJittedFunction(
         arg_buffers, output_buffers, temp_buffer_.get(), &events,
-        /*instance_context=*/nullptr, runtime(), /*continuation_point=*/0);
+        /*instance_context=*/&callbacks_, runtime(), /*continuation_point=*/0);
 
     return InterpreterEventsToStatus(events);
   }
@@ -203,8 +213,7 @@ class FunctionJit {
         jit_runtime_(std::move(runtime)) {}
 
   static absl::StatusOr<std::unique_ptr<FunctionJit>> CreateInternal(
-      Function* xls_function, int64_t opt_level, bool emit_object_code,
-      JitObserver* observer);
+      Function* xls_function, int64_t opt_level, JitObserver* observer);
 
   template <bool kForceZeroCopy, typename... ArgsT>
   absl::Status RunWithUnpackedViewsCommon(ArgsT... args) {
@@ -276,6 +285,9 @@ class FunctionJit {
   // Pre-allocated & aligned storage for required temporary storage. NB Not
   // thread safe.
   JitTempBuffer temp_buffer_;
+
+  // Context callbacks.
+  InstanceContext callbacks_ = InstanceContext::CreateForFunc();
 
   std::unique_ptr<JitRuntime> jit_runtime_;
 };

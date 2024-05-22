@@ -19,6 +19,10 @@
 package(
     default_applicable_licenses = ["//:license"],
     default_visibility = ["//visibility:private"],
+    features = [
+        "layering_check",
+        "parse_headers",
+    ],
     licenses = ["notice"],  # Apache 2.0
 )
 
@@ -54,6 +58,7 @@ cc_test(
     deps = [
         ":log_lines",
         ":scoped_mock_log",
+        "@com_google_absl//absl/base:log_severity",
         "//xls/common:xls_gunit_main",
         "@com_google_googletest//:gtest",
     ],

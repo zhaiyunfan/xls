@@ -19,7 +19,12 @@ load("@rules_python//python:proto.bzl", "py_proto_library")
 load("@xls_pip_deps//:requirements.bzl", "requirement")
 
 package(
+    default_applicable_licenses = ["//:license"],
     default_visibility = ["//xls:xls_internal"],
+    features = [
+        #"layering_check",  TODO(google/xls#1411)
+        "parse_headers",
+    ],
     licenses = ["notice"],  # Apache 2.0
 )
 
@@ -152,7 +157,6 @@ cc_test(
         "//xls/ir:function_builder",
         "//xls/ir:ir_test_base",
         "//xls/ir:source_location",
-        "//xls/ir:xls_ir_interface_cc_proto",
         "@com_google_googletest//:gtest",
     ],
 )
@@ -167,6 +171,7 @@ cc_binary(
         "//xls/common:init_xls",
         "//xls/common/file:filesystem",
         "//xls/common/status:status_macros",
+        "//xls/ir",
         "//xls/ir:ir_parser",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/status",
@@ -348,9 +353,13 @@ cc_binary(
         "//xls/common/file:filesystem",
         "//xls/common/status:ret_check",
         "//xls/common/status:status_macros",
+        "//xls/ir",
+        "//xls/ir:bits",
         "//xls/ir:bits_ops",
+        "//xls/ir:format_preference",
         "//xls/ir:ir_parser",
         "//xls/ir:value",
+        "//xls/netlist",
         "//xls/netlist:cell_library",
         "//xls/netlist:function_extractor",
         "//xls/netlist:interpreter",
@@ -392,6 +401,7 @@ cc_library(
     srcs = ["proto_to_dslx.cc"],
     hdrs = ["proto_to_dslx.h"],
     deps = [
+        "//xls/common:math_util",
         "//xls/common:proto_adaptor_utils",
         "//xls/common/file:filesystem",
         "//xls/common/file:temp_directory",
@@ -444,6 +454,7 @@ cc_test(
         "//xls/common/status:matchers",
         "//xls/dslx/frontend:module",
         "@com_google_googletest//:gtest",
+        "@com_google_protobuf//:protobuf",
     ],
 )
 
@@ -455,6 +466,7 @@ cc_binary(
         "//xls/common:init_xls",
         "//xls/common/file:filesystem",
         "//xls/common/status:status_macros",
+        "//xls/ir",
         "//xls/ir:ir_parser",
         "//xls/solvers:z3_ir_translator",
         "@com_google_absl//absl/flags:flag",
@@ -727,6 +739,7 @@ cc_library(
         "//xls/common/status:status_macros",
         "//xls/ir",
         "//xls/ir:ir_parser",
+        "//xls/ir:ram_rewrite_cc_proto",
         "//xls/ir:verifier",
         "//xls/passes:optimization_pass",
         "//xls/passes:optimization_pass_pipeline",
@@ -1102,6 +1115,7 @@ cc_binary(
     deps = [
         ":eval_utils",
         "//xls/codegen:module_signature",
+        "//xls/codegen:module_signature_cc_proto",
         "//xls/codegen:vast",
         "//xls/common:exit_status",
         "//xls/common:init_xls",
@@ -1331,6 +1345,7 @@ cc_binary(
         "//xls/common:init_xls",
         "//xls/common/file:filesystem",
         "//xls/common/status:status_macros",
+        "//xls/data_structures:binary_decision_diagram",
         "//xls/examples:sample_packages",
         "//xls/ir",
         "//xls/ir:ir_parser",
@@ -1436,6 +1451,7 @@ cc_binary(
         "//xls/dslx/frontend:ast",
         "//xls/dslx/frontend:parser",
         "//xls/dslx/frontend:scanner",
+        "//xls/dslx/ir_convert:convert_options",
         "//xls/dslx/ir_convert:ir_converter",
         "//xls/dslx/type_system:type",
         "//xls/dslx/type_system:type_info",
@@ -1506,6 +1522,7 @@ cc_binary(
     deps = [
         ":codegen",
         ":codegen_flags",
+        ":codegen_flags_cc_proto",
         ":scheduling_options_flags",
         ":scheduling_options_flags_cc_proto",
         "//xls/codegen:block_metrics",

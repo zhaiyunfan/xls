@@ -37,7 +37,9 @@
 #include "xls/ir/type.h"
 #include "xls/ir/value.h"
 #include "xls/ir/value_utils.h"
+#include "xls/jit/aot_compiler.h"
 #include "xls/jit/function_base_jit.h"
+#include "xls/jit/jit_callbacks.h"
 #include "xls/jit/jit_runtime.h"
 #include "xls/jit/observer.h"
 #include "xls/jit/orc_jit.h"
@@ -46,8 +48,7 @@ namespace xls {
 
 absl::StatusOr<std::unique_ptr<FunctionJit>> FunctionJit::Create(
     Function* xls_function, int64_t opt_level, JitObserver* observer) {
-  return CreateInternal(xls_function, opt_level, /*emit_object_code=*/false,
-                        observer);
+  return CreateInternal(xls_function, opt_level, observer);
 }
 
 namespace {
@@ -63,26 +64,46 @@ int64_t JitObjectCodeFunctionUse(const uint8_t* const* inputs,
 }
 }  // namespace
 
+// Returns an object containing an AOT-compiled version of the specified XLS
+// function.
+/* static */ absl::StatusOr<std::unique_ptr<FunctionJit>>
+FunctionJit::CreateFromAot(Function* xls_function,
+                           const AotEntrypointProto& entrypoint,
+                           JitFunctionType function_unpacked,
+                           std::optional<JitFunctionType> function_packed) {
+  XLS_ASSIGN_OR_RETURN(
+      JittedFunctionBase jfb,
+      JittedFunctionBase::BuildFromAot(xls_function, entrypoint,
+                                       function_unpacked, function_packed));
+  XLS_ASSIGN_OR_RETURN(auto runtime, JitRuntime::Create());
+  // OrcJit is simply the arena that holds the JITed code. Since we are already
+  // compiled theres no need to create and initialize it.
+  // TODO(allight): Ideally we wouldn't even need to link in the llvm stuff if
+  // we go down this path, that's a larger refactor however and just carrying
+  // around some extra .so's isn't a huge deal.
+  return std::unique_ptr<FunctionJit>(
+      new FunctionJit(xls_function, std::unique_ptr<OrcJit>(nullptr),
+                      std::move(jfb), std::move(runtime)));
+}
+
 absl::StatusOr<JitObjectCode> FunctionJit::CreateObjectCode(
-    Function* xls_function, int64_t opt_level, JitObserver* observer) {
-  XLS_ASSIGN_OR_RETURN(std::unique_ptr<FunctionJit> jit,
-                       CreateInternal(xls_function, opt_level,
-                                      /*emit_object_code=*/true, observer));
+    Function* xls_function, int64_t opt_level, bool include_msan) {
+  XLS_ASSIGN_OR_RETURN(std::unique_ptr<AotCompiler> comp,
+                       AotCompiler::Create(include_msan, opt_level));
+  XLS_ASSIGN_OR_RETURN(JittedFunctionBase jfb,
+                       JittedFunctionBase::Build(xls_function, *comp));
+  XLS_ASSIGN_OR_RETURN(auto obj_code, std::move(comp)->GetObjectCode());
   return JitObjectCode{
-      .object_code = jit->orc_jit_->GetObjectCode(),
-      .function_base = jit->jitted_function_base().WithCodePointers(
-          JitObjectCodeFunctionUse, JitObjectCodeFunctionUse),
+      .object_code = std::move(obj_code),
+      .function_base = std::move(jfb),
   };
 }
 
 absl::StatusOr<std::unique_ptr<FunctionJit>> FunctionJit::CreateInternal(
-    Function* xls_function, int64_t opt_level, bool emit_object_code,
-    JitObserver* observer) {
-  XLS_ASSIGN_OR_RETURN(auto orc_jit,
-                       OrcJit::Create(opt_level, emit_object_code, observer));
-  XLS_ASSIGN_OR_RETURN(
-      llvm::DataLayout data_layout,
-      OrcJit::CreateDataLayout(/*aot_specification=*/emit_object_code));
+    Function* xls_function, int64_t opt_level, JitObserver* observer) {
+  XLS_ASSIGN_OR_RETURN(auto orc_jit, OrcJit::Create(opt_level, observer));
+  XLS_ASSIGN_OR_RETURN(llvm::DataLayout data_layout,
+                       orc_jit->CreateDataLayout());
   XLS_ASSIGN_OR_RETURN(auto function_base,
                        JittedFunctionBase::Build(xls_function, *orc_jit));
 
@@ -120,7 +141,7 @@ absl::StatusOr<InterpreterResult<Value>> FunctionJit::Run(
   InterpreterEvents events;
   jitted_function_base_.RunJittedFunction(
       arg_buffers_, result_buffers_, temp_buffer_, &events,
-      /*instance_context=*/nullptr, /*jit_runtime=*/runtime(),
+      /*instance_context=*/&callbacks_, /*jit_runtime=*/runtime(),
       /*continuation_point=*/0);
   Value result = jit_runtime_->UnpackBuffer(
       result_buffers_.pointers()[0], xls_function_->return_value()->GetType());
@@ -171,7 +192,7 @@ void FunctionJit::InvokeUnalignedJitFunction(
   uint8_t* output_buffers[1] = {output_buffer};
   jitted_function_base_.RunUnalignedJittedFunction<kForceZeroCopy>(
       arg_buffers.data(), output_buffers, temp_buffer_.get(), events,
-      /*instance_context=*/nullptr, runtime(), /*continuation=*/0);
+      /*instance_context=*/&callbacks_, runtime(), /*continuation=*/0);
 }
 
 template void FunctionJit::InvokeUnalignedJitFunction</*kForceZeroCopy=*/false>(

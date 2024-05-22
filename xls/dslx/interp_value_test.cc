@@ -24,6 +24,8 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "xls/common/status/matchers.h"
+#include "xls/dslx/value_format_descriptor.h"
+#include "xls/ir/format_preference.h"
 
 namespace xls::dslx {
 namespace {
@@ -155,6 +157,81 @@ TEST(InterpValueTest, ArrayOfU32HumanStr) {
       InterpValue::MakeArray({InterpValue::MakeU32(2), InterpValue::MakeU32(3),
                               InterpValue::MakeU32(4)});
   EXPECT_EQ(array->ToHumanString(), "[2, 3, 4]");
+}
+
+TEST(InterpValueTest, Array1DUpdate) {
+  auto array = InterpValue::MakeArray(
+      {InterpValue::MakeU32(1), InterpValue::MakeU32(2)});
+  auto index = InterpValue::MakeU8(1);
+  EXPECT_EQ(array->Update(index, InterpValue::MakeU32(4))->ToHumanString(),
+            "[1, 4]");
+}
+
+TEST(InterpValueTest, Array2DUpdate) {
+  auto array =
+      InterpValue::MakeArray({InterpValue::MakeArray({InterpValue::MakeU32(1),
+                                                      InterpValue::MakeU32(2)})
+                                  .value(),
+                              InterpValue::MakeArray({InterpValue::MakeU32(3),
+                                                      InterpValue::MakeU32(4)})
+                                  .value()});
+  auto indices =
+      InterpValue::MakeTuple({InterpValue::MakeU8(1), InterpValue::MakeU32(0)});
+  EXPECT_EQ(array->Update(indices, InterpValue::MakeU32(4))->ToHumanString(),
+            "[[1, 2], [4, 4]]");
+}
+
+TEST(InterpValueTest, Array2DUpdateEmptyIndices) {
+  auto array =
+      InterpValue::MakeArray({InterpValue::MakeArray({InterpValue::MakeU32(1),
+                                                      InterpValue::MakeU32(2)})
+                                  .value(),
+                              InterpValue::MakeArray({InterpValue::MakeU32(3),
+                                                      InterpValue::MakeU32(4)})
+                                  .value()});
+  auto indices = InterpValue::MakeTuple({});
+  auto value =
+      InterpValue::MakeArray({InterpValue::MakeArray({InterpValue::MakeU32(4),
+                                                      InterpValue::MakeU32(3)})
+                                  .value(),
+                              InterpValue::MakeArray({InterpValue::MakeU32(2),
+                                                      InterpValue::MakeU32(1)})
+                                  .value()})
+          .value();
+  EXPECT_EQ(array->Update(indices, value)->ToHumanString(), "[[4, 3], [2, 1]]");
+}
+
+TEST(InterpValueTest, Array2DUpdateArrayWrongDimension) {
+  auto array =
+      InterpValue::MakeArray({InterpValue::MakeArray({InterpValue::MakeU32(1),
+                                                      InterpValue::MakeU32(2)})
+                                  .value(),
+                              InterpValue::MakeArray({InterpValue::MakeU32(3),
+                                                      InterpValue::MakeU32(4)})
+                                  .value()});
+  auto indices =
+      InterpValue::MakeTuple({InterpValue::MakeU8(1), InterpValue::MakeU8(0),
+                              InterpValue::MakeU32(0)});
+  EXPECT_THAT(array->Update(indices, InterpValue::MakeU32(4)),
+              status_testing::StatusIs(
+                  absl::StatusCode::kInvalidArgument,
+                  testing::HasSubstr("Update of non-array element")));
+}
+
+TEST(InterpValueTest, Array2DUpdateArrayOutOfBounds) {
+  auto array =
+      InterpValue::MakeArray({InterpValue::MakeArray({InterpValue::MakeU32(1),
+                                                      InterpValue::MakeU32(2)})
+                                  .value(),
+                              InterpValue::MakeArray({InterpValue::MakeU32(3),
+                                                      InterpValue::MakeU32(4)})
+                                  .value()});
+  auto indices =
+      InterpValue::MakeTuple({InterpValue::MakeU8(2), InterpValue::MakeU8(0)});
+  EXPECT_THAT(array->Update(indices, InterpValue::MakeU32(4)),
+              status_testing::StatusIs(
+                  absl::StatusCode::kInvalidArgument,
+                  testing::HasSubstr("Update index 2 is out of bounds")));
 }
 
 TEST(InterpValueTest, TestPredicates) {

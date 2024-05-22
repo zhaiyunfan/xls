@@ -30,6 +30,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/types/span.h"
+#include "xls/codegen/module_signature.pb.h"
 #include "xls/common/status/ret_check.h"
 #include "xls/common/status/status_macros.h"
 #include "xls/interpreter/block_evaluator.h"
@@ -43,6 +44,7 @@
 #include "xls/ir/value_utils.h"
 #include "xls/jit/function_base_jit.h"
 #include "xls/jit/jit_buffer.h"
+#include "xls/jit/jit_callbacks.h"
 #include "xls/jit/jit_runtime.h"
 #include "xls/jit/orc_jit.h"
 
@@ -70,7 +72,8 @@ absl::Status BlockJit::RunOneCycle(BlockJitContinuation& continuation) {
   function_.RunJittedFunction(
       continuation.input_buffers_.current(),
       continuation.output_buffers_.current(), continuation.temp_buffer_,
-      &continuation.GetEvents(), /*instance_context=*/nullptr, runtime_,
+      &continuation.GetEvents(), /*instance_context=*/&continuation.callbacks_,
+      runtime_,
       /*continuation_point=*/0);
   continuation.SwapRegisters();
   return absl::OkStatus();
@@ -153,7 +156,8 @@ BlockJitContinuation::BlockJitContinuation(Block* block, BlockJit* jit,
                                           output_port_buffers_memory_,
                                           register_buffers_memory_,
                                           /*input=*/false)),
-      temp_buffer_(jit_func.CreateTempBuffer()) {
+      temp_buffer_(jit_func.CreateTempBuffer()),
+      callbacks_(InstanceContext::CreateForBlock()) {
   // since input and output share the same register pointers they need to use
   // different sides at all times.
   input_buffers_.SetActive(IOSpace::RegisterSpace::kLeft);

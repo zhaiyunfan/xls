@@ -90,8 +90,8 @@ pop_ready,  pop_data,  pop_valid);
   parameter Width = 32,
             Depth = 32,
             EnableBypass = 0,
-            RegisterPushOutputs = 0,
-            RegisterPopOutputs = 0;
+            RegisterPushOutputs = 1,
+            RegisterPopOutputs = 1;
   localparam AddrWidth = $clog2(Depth) + 1;
   input  wire             clk;
   input  wire             rst;
@@ -104,9 +104,9 @@ pop_ready,  pop_data,  pop_valid);
 
   // Require depth be 1 and bypass disabled.
   initial begin
-    if (EnableBypass || Depth != 1 || RegisterPushOutputs ||
-        RegisterPopOutputs) begin
-      $fatal("FIFO configuration not supported.");
+    if (EnableBypass || Depth != 1 || !RegisterPushOutputs) begin
+      // FIFO configuration not supported.
+      $fatal(1);
     end
   end
 
@@ -471,7 +471,7 @@ TEST_P(BlockGeneratorTest, BlockWithAssertNoLabel) {
       EXPECT_THAT(
           verilog,
           HasSubstr(
-              R"(assert property (@(posedge my_clk) disable iff (my_rst) a_d < 32'h0000_002a) else $fatal(0, "a is not greater than 42");)"));
+              R"(assert property (@(posedge my_clk) disable iff ($sampled(my_rst)) a_d < 32'h0000_002a) else $fatal(0, "a is not greater than 42");)"));
     } else {
       EXPECT_THAT(verilog, Not(HasSubstr("assert")));
     }
@@ -536,7 +536,7 @@ TEST_P(BlockGeneratorTest, BlockWithAssertWithLabel) {
       EXPECT_THAT(
           verilog,
           HasSubstr(
-              R"(assert property (@(posedge my_clk) disable iff ($isunknown(a < 32'h0000_002a)) a < 32'h0000_002a) else $fatal(0, "a is not greater than 42");)"));
+              R"(assert property (@(posedge my_clk) disable iff ($sampled($isunknown(a < 32'h0000_002a))) a < 32'h0000_002a) else $fatal(0, "a is not greater than 42");)"));
     } else {
       EXPECT_THAT(verilog, Not(HasSubstr("assert")));
     }
@@ -572,7 +572,7 @@ TEST_P(BlockGeneratorTest, BlockWithAssertWithLabel) {
                                  "but block has no reset signal")));
 }
 
-TEST_P(BlockGeneratorTest, AssertMissingClock) {
+TEST_P(BlockGeneratorTest, AssertCombinationalOrMissingClock) {
   if (!UseSystemVerilog()) {
     return;
   }
@@ -583,11 +583,28 @@ TEST_P(BlockGeneratorTest, AssertMissingClock) {
            "a is not greater than 42", "the_label");
   XLS_ASSERT_OK_AND_ASSIGN(Block * block, b.Build());
 
-  EXPECT_THAT(
-      GenerateVerilog(block, codegen_options()),
-      StatusIs(
-          absl::StatusCode::kInvalidArgument,
-          HasSubstr("Emitting an assert in SystemVerilog requires a clock")));
+  {
+    XLS_ASSERT_OK_AND_ASSIGN(std::string verilog,
+                             GenerateVerilog(block, codegen_options()));
+    EXPECT_THAT(
+        verilog,
+        HasSubstr(
+            R"(assert final ($isunknown(a < 32'h0000_002a) || a < 32'h0000_002a))"));
+  }
+
+  {
+    XLS_ASSERT_OK_AND_ASSIGN(
+        std::string verilog,
+        GenerateVerilog(
+            block, codegen_options().SetOpOverride(
+                       Op::kAssert,
+                       std::make_unique<OpOverrideAssertion>(
+                           R"(ASSERT({label}, {condition}, "{message}"))"))));
+    EXPECT_THAT(
+        verilog,
+        HasSubstr(
+            R"(ASSERT(the_label, a < 32'h0000_002a, "a is not greater than 42"))"));
+  }
 
   EXPECT_THAT(GenerateVerilog(
                   block, codegen_options().SetOpOverride(
@@ -1124,7 +1141,7 @@ TEST_P(BlockGeneratorTest, LoopbackFifoInstantiation) {
 
 chan in(bits[32], id=0, kind=streaming, ops=receive_only, flow_control=ready_valid, metadata="")
 chan out(bits[32], id=1, kind=streaming, ops=send_only, flow_control=ready_valid, metadata="")
-chan loopback(bits[32], id=2, kind=streaming, ops=send_receive, flow_control=ready_valid, fifo_depth=1, bypass=false, metadata="")
+chan loopback(bits[32], id=2, kind=streaming, ops=send_receive, flow_control=ready_valid, fifo_depth=1, bypass=false, register_push_outputs=true, metadata="")
 
 proc running_sum(first_cycle: bits[1], init={1}) {
   tkn: token = literal(value=token, id=1000)

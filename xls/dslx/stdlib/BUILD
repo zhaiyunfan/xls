@@ -20,6 +20,7 @@ load(
     "xls_dslx_fmt_test",
     "xls_dslx_library",
     "xls_dslx_opt_ir",
+    "xls_dslx_prove_quickcheck_test",
     "xls_dslx_test",
     "xls_eval_ir_test",
     "xls_ir_cc_library",
@@ -28,6 +29,10 @@ load(
 package(
     default_applicable_licenses = ["//:license"],
     default_visibility = ["//xls:xls_users"],
+    features = [
+        "layering_check",
+        "parse_headers",
+    ],
     licenses = ["notice"],  # Apache 2.0
 )
 
@@ -44,6 +49,11 @@ xls_dslx_fmt_test(
 
 xls_dslx_test(
     name = "std_dslx_test",
+    srcs = ["std.x"],
+)
+
+xls_dslx_prove_quickcheck_test(
+    name = "std_dslx_prove_quickcheck_test",
     srcs = ["std.x"],
 )
 
@@ -66,6 +76,12 @@ xls_dslx_library(
 
 xls_dslx_test(
     name = "apfloat_dslx_test",
+    srcs = ["apfloat.x"],
+    deps = [":apfloat_dslx"],
+)
+
+xls_dslx_prove_quickcheck_test(
+    name = "apfloat_dslx_prove_quickcheck_test",
     srcs = ["apfloat.x"],
     deps = [":apfloat_dslx"],
 )
@@ -467,13 +483,13 @@ cc_test(
     deps = [
         ":float32_fma_jit_wrapper",
         ":float32_test_utils",
+        "@com_google_absl//absl/base",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/random",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:str_format",
         "//xls/common:exit_status",
         "//xls/common:init_xls",
-        "//xls/common:math_util",
         "//xls/tools:testbench",
         "//xls/tools:testbench_builder",
     ],
@@ -507,6 +523,7 @@ cc_test(
     deps = [
         ":float32_ldexp_jit_wrapper",
         ":float32_test_utils",
+        "@com_google_absl//absl/base",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/random",
@@ -514,8 +531,6 @@ cc_test(
         "@com_google_absl//absl/strings:str_format",
         "//xls/common:exit_status",
         "//xls/common:init_xls",
-        "//xls/common:math_util",
-        "//xls/common/status:status_macros",
         "//xls/tools:testbench",
         "//xls/tools:testbench_builder",
     ],
@@ -755,8 +770,8 @@ cc_test(
     ],
     tags = ["optonly"],
     deps = [
-        ":float32_test_utils",
         ":float64_fma_jit_wrapper",
+        "@com_google_absl//absl/base",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/random",
         "@com_google_absl//absl/status",

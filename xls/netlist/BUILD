@@ -17,6 +17,10 @@
 package(
     default_applicable_licenses = ["//:license"],
     default_visibility = ["//xls:xls_internal"],
+    features = [
+        #"layering_check",  TODO(google/xls#1411)
+        "parse_headers",
+    ],
     licenses = ["notice"],  # Apache 2.0
 )
 
@@ -50,6 +54,7 @@ cc_library(
     hdrs = ["fake_cell_library.h"],
     data = [":fake_cell_library.textproto"],
     deps = [
+        ":cell_library",
         ":netlist",
         ":netlist_cc_proto",
         "//xls/common/file:filesystem",
@@ -96,6 +101,7 @@ cc_test(
         ":interpreter",
         ":lib_parser",
         ":netlist",
+        ":netlist_cc_proto",
         ":netlist_parser",
         "//xls/common:xls_gunit_main",
         "//xls/common/status:matchers",
@@ -195,7 +201,10 @@ cc_binary(
     name = "parse_netlist_main",
     srcs = ["parse_netlist_main.cc"],
     deps = [
+        ":cell_library",
         ":find_logic_clouds",
+        ":netlist",
+        ":netlist_cc_proto",
         ":netlist_parser",
         "//xls/common:exit_status",
         "//xls/common:init_xls",
@@ -221,6 +230,7 @@ cc_library(
     srcs = ["find_logic_clouds.cc"],
     hdrs = ["find_logic_clouds.h"],
     deps = [
+        ":cell_library",
         ":netlist",
         "//xls/data_structures:union_find",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -235,8 +245,10 @@ cc_test(
     name = "find_logic_clouds_test",
     srcs = ["find_logic_clouds_test.cc"],
     deps = [
+        ":cell_library",
         ":fake_cell_library",
         ":find_logic_clouds",
+        ":netlist",
         ":netlist_parser",
         "//xls/common:xls_gunit_main",
         "//xls/common/status:matchers",
@@ -249,11 +261,13 @@ cc_library(
     srcs = ["logical_effort.cc"],
     hdrs = ["logical_effort.h"],
     deps = [
+        ":cell_library",
         ":netlist",
         "//xls/common:math_util",
         "//xls/common/status:ret_check",
         "//xls/common/status:status_macros",
         "@com_google_absl//absl/log",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:span",
@@ -264,8 +278,10 @@ cc_test(
     name = "logical_effort_test",
     srcs = ["logical_effort_test.cc"],
     deps = [
+        ":cell_library",
         ":fake_cell_library",
         ":logical_effort",
+        ":netlist",
         ":netlist_parser",
         "//xls/common:xls_gunit_main",
         "//xls/common/status:matchers",
@@ -281,12 +297,14 @@ cc_library(
     deps = [
         "//xls/common/status:status_macros",
         "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/container:inlined_vector",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/types:variant",
     ],
 )
 
@@ -320,6 +338,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/types:variant",
     ],
 )
 
@@ -328,6 +347,7 @@ cc_binary(
     srcs = ["function_extractor_main.cc"],
     deps = [
         ":function_extractor",
+        ":lib_parser",
         ":netlist_cc_proto",
         "//xls/common:exit_status",
         "//xls/common:init_xls",

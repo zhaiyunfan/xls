@@ -21,17 +21,20 @@
 #include <vector>
 
 #include "absl/log/check.h"
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
+#include "absl/synchronization/mutex.h"
 #include "absl/types/span.h"
 #include "llvm/include/llvm/IR/DataLayout.h"
 #include "llvm/include/llvm/Support/Alignment.h"
+#include "xls/common/bits_util.h"
+#include "xls/common/math_util.h"
 #include "xls/common/status/status_macros.h"
 #include "xls/ir/bits.h"
-#include "xls/ir/ir_parser.h"
-#include "xls/ir/package.h"
 #include "xls/ir/type.h"
 #include "xls/ir/value.h"
+#include "xls/jit/llvm_type_converter.h"
 #include "xls/jit/orc_jit.h"
 
 namespace xls {
@@ -43,9 +46,9 @@ JitRuntime::JitRuntime(llvm::DataLayout data_layout)
           std::make_unique<LlvmTypeConverter>(context_.get(), data_layout_)) {}
 
 /* static */ absl::StatusOr<std::unique_ptr<JitRuntime>> JitRuntime::Create() {
-  XLS_ASSIGN_OR_RETURN(
-      llvm::DataLayout data_layout,
-      xls::OrcJit::CreateDataLayout(/*aot_specification=*/false));
+  XLS_ASSIGN_OR_RETURN(auto orc_jit, OrcJit::Create());
+  XLS_ASSIGN_OR_RETURN(llvm::DataLayout data_layout,
+                       orc_jit->CreateDataLayout());
   return std::make_unique<JitRuntime>(data_layout);
 }
 

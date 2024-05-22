@@ -14,6 +14,10 @@
 
 package(
     default_applicable_licenses = ["//:license"],
+    features = [
+        "layering_check",
+        "parse_headers",
+    ],
     licenses = ["notice"],  # Apache 2.0
 )
 
@@ -98,6 +102,7 @@ cc_binary(
         ":language_server_adapter",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
         "@jsonhpp",
         "//xls/common:exit_status",
         "//xls/common:init_xls",

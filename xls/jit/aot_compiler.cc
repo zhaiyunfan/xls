@@ -1,4 +1,4 @@
-// Copyright 2022 The XLS Authors
+// Copyright 2024 The XLS Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,210 +12,190 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Driver for the XLS AOT compilation process.
-// Uses the JIT to produce and object file, creates a header file and source to
-// wrap (i.e., simplify) execution of the generated code, and writes the trio to
-// disk.
+#include "xls/jit/aot_compiler.h"
 
 #include <cstdint>
-#include <iostream>
 #include <memory>
 #include <string>
-#include <string_view>
+#include <utility>
 #include <vector>
 
-#include "absl/algorithm/container.h"
-#include "absl/flags/flag.h"
-#include "absl/log/check.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
-#include "llvm/include/llvm/IR/DataLayout.h"
-#include "google/protobuf/text_format.h"
-#include "xls/common/file/filesystem.h"
-#include "xls/common/init_xls.h"
-#include "xls/common/status/ret_check.h"
+#include "llvm/include/llvm/ADT/SmallVector.h"
+#include "llvm/include/llvm/ADT/StringRef.h"
+#include "llvm/include/llvm/Analysis/CGSCCPassManager.h"
+#include "llvm/include/llvm/ExecutionEngine/Orc/JITTargetMachineBuilder.h"
+#include "llvm/include/llvm/IR/Attributes.h"
+#include "llvm/include/llvm/IR/BasicBlock.h"
+#include "llvm/include/llvm/IR/DerivedTypes.h"
+#include "llvm/include/llvm/IR/GlobalVariable.h"
+#include "llvm/include/llvm/IR/IRBuilder.h"
+#include "llvm/include/llvm/IR/LLVMContext.h"
+#include "llvm/include/llvm/IR/LegacyPassManager.h"
+#include "llvm/include/llvm/IR/Module.h"
+#include "llvm/include/llvm/IR/Type.h"
+#include "llvm/include/llvm/Passes/PassBuilder.h"
+#include "llvm/include/llvm/Support/Casting.h"
+#include "llvm/include/llvm/Support/CodeGen.h"
+#include "llvm/include/llvm/Support/Error.h"
+#include "llvm/include/llvm/Support/raw_ostream.h"
+#include "llvm/include/llvm/Target/TargetMachine.h"
+#include "llvm/include/llvm/TargetParser/SubtargetFeature.h"
+#include "llvm/include/llvm/TargetParser/Triple.h"
+#include "llvm/include/llvm/TargetParser/X86TargetParser.h"
 #include "xls/common/status/status_macros.h"
-#include "xls/ir/function.h"
-#include "xls/ir/ir_parser.h"
-#include "xls/ir/nodes.h"
-#include "xls/ir/package.h"
-#include "xls/jit/aot_entrypoint.pb.h"
-#include "xls/jit/function_jit.h"
-#include "xls/jit/llvm_type_converter.h"
-#include "xls/jit/orc_jit.h"
-#include "xls/jit/type_layout.pb.h"
-
-ABSL_FLAG(std::string, input, "", "Path to the IR to compile.");
-ABSL_FLAG(std::string, top, "",
-          "IR function to compile. "
-          "If unspecified, the package top function will be used - "
-          "in that case, the package-scoping mangling will be removed.");
-ABSL_FLAG(std::string, output_object, "",
-          "Path at which to write the output object file.");
-ABSL_FLAG(std::string, output_proto, "",
-          "Path at which to write the AotEntrypointProto describing the ABI of "
-          "the generated object file.");
-ABSL_FLAG(bool, generate_textproto, false,
-          "Generate the AotEntrypointProto as a textproto");
-#ifdef ABSL_HAVE_MEMORY_SANITIZER
-static constexpr bool kHasMsan = true;
-#else
-static constexpr bool kHasMsan = false;
-#endif
-ABSL_FLAG(bool, include_msan, kHasMsan,
-          "Whether to include msan calls in the jitted code. This *must* match "
-          "the configuration of the binary the jitted code is included in.");
+#include "xls/jit/jit_emulated_tls.h"
+#include "xls/jit/llvm_compiler.h"
 
 namespace xls {
+
+/* static */ absl::StatusOr<std::unique_ptr<AotCompiler>> AotCompiler::Create(
+    bool include_msan, int64_t opt_level) {
+  LlvmCompiler::InitializeLlvm();
+  auto compiler =
+      std::unique_ptr<AotCompiler>(new AotCompiler(opt_level, include_msan));
+  XLS_RETURN_IF_ERROR(compiler->Init());
+  return std::move(compiler);
+}
+
+absl::StatusOr<std::unique_ptr<llvm::TargetMachine>>
+AotCompiler::CreateTargetMachine() {
+  auto error_or_target_builder =
+      llvm::orc::JITTargetMachineBuilder::detectHost();
+  if (!error_or_target_builder) {
+    return absl::InternalError(
+        absl::StrCat("Unable to detect host: ",
+                     llvm::toString(error_or_target_builder.takeError())));
+  }
+
+  error_or_target_builder->setRelocationModel(llvm::Reloc::Model::PIC_);
+  // In ahead-of-time compilation we're compiling on machines we are not
+  // immediately about to run on, where runtime machines may have
+  // heterogeneous specifications vs the compilation machine. We assume a
+  // baseline level of compatibility for all machines XLS compilations might
+  // run on.
+  //
+  // TODO(allight): Ideally we should allow the user to select what target we
+  // want instead of just hard-coding a haswell.
+  switch (error_or_target_builder->getTargetTriple().getArch()) {
+    case llvm::Triple::x86_64: {
+      const std::string kBaselineCpu = "haswell";
+      error_or_target_builder->setCPU(kBaselineCpu);
+      // Clear out the existing features.
+      error_or_target_builder->getFeatures() = llvm::SubtargetFeatures();
+      // Add in features available on our "baseline" CPU.
+      llvm::SmallVector<llvm::StringRef, 32> target_cpu_features;
+      llvm::X86::getFeaturesForCPU(kBaselineCpu, target_cpu_features,
+                                   /*NeedPlus=*/true);
+      std::vector<std::string> features(target_cpu_features.begin(),
+                                        target_cpu_features.end());
+      error_or_target_builder->addFeatures(features);
+      break;
+    }
+    case llvm::Triple::aarch64:
+      return absl::UnimplementedError(
+          "Support AOT feature flag setting for aarch64 compilation.");
+    default:
+      return absl::InvalidArgumentError(
+          "Compiling on unrecognized host architecture for AOT "
+          "compilation: " +
+          std::string{
+              error_or_target_builder->getTargetTriple().getArchName()});
+  }
+  // NB We don't need to do anything special to force emutls because we get the
+  // same base target as the orc jit which doesn't support it.
+  auto error_or_target_machine = error_or_target_builder->createTargetMachine();
+  if (!error_or_target_machine) {
+    return absl::InternalError(
+        absl::StrCat("Unable to create target machine: ",
+                     llvm::toString(error_or_target_machine.takeError())));
+  }
+  return std::move(error_or_target_machine.get());
+}
+
+absl::Status AotCompiler::InitInternal() {
+  context_ = std::make_unique<llvm::LLVMContext>();
+  return absl::OkStatus();
+}
 namespace {
 
-// Returns the TypeLayouts for the arguments of `f`.
-TypeLayoutsProto ArgLayouts(Function* f, LlvmTypeConverter& type_converter) {
-  TypeLayoutsProto layouts_proto;
-  for (Param* param : f->params()) {
-    *layouts_proto.add_layouts() =
-        type_converter.CreateTypeLayout(param->GetType()).ToProto();
-  }
-  return layouts_proto;
-}
+absl::Status AddWeakEmuTls(llvm::Module& module, llvm::LLVMContext* context) {
+  // Add weak symbol definitions for:
+  //   __emutls_v.__msan_retval_tls == kRevalTlsEntry
+  //   __emutls_v.__msan_param_tls == kParamTlsEntry
+  //   __emutls_get_address == call to kExportedEmulatedMsanEntrypointName
+  llvm::Type* void_ptr_ty = llvm::PointerType::get(*context, 0);
+  llvm::FunctionType* emutls_get_addr_type =
+      llvm::FunctionType::get(void_ptr_ty, void_ptr_ty, /*isVarArg=*/false);
+  llvm::Type* void_ptr_ptr_ty = llvm::PointerType::get(void_ptr_ty, 0);
+  // llvm::Type* void_ptr_ptr_ty = llvm::PointerType::get(void_ptr_ty, 0);
+  // Make sure its weak linkage so other emutls can override it.
+  // NB module takes ownership of the pointer.
+  module.insertGlobalVariable(new llvm::GlobalVariable(
+      void_ptr_ty, /*isConstant=*/true, llvm::GlobalValue::InternalLinkage,
+      llvm::Constant::getIntegerValue(
+          void_ptr_ty,
+          llvm::APInt(module.getDataLayout().getPointerSize(), kParamTlsEntry)),
+      "__emutls_v.__msan_param_tls"));
+  module.insertGlobalVariable(new llvm::GlobalVariable(
+      void_ptr_ty, /*isConstant=*/true, llvm::GlobalValue::InternalLinkage,
+      llvm::Constant::getIntegerValue(
+          void_ptr_ty, llvm::APInt(module.getDataLayout().getPointerSize(),
+                                   kRetvalTlsEntry)),
+      "__emutls_v.__msan_retval_tls"));
+  llvm::FunctionCallee tls_impl = module.getOrInsertFunction(
+      kExportedEmulatedMsanEntrypointName, emutls_get_addr_type);
 
-// Returns the TypeLayout for the return value of `f`.
-TypeLayoutsProto ResultLayouts(Function* f, LlvmTypeConverter& type_converter) {
-  TypeLayoutsProto layout_proto;
-  *layout_proto.add_layouts() =
-      type_converter.CreateTypeLayout(f->return_value()->GetType()).ToProto();
-  return layout_proto;
-}
-
-absl::StatusOr<AotEntrypointProto> GenerateEntrypointProto(
-    Package* package, Function* func, const JitObjectCode& object_code,
-    bool include_msan) {
-  AotEntrypointProto proto;
-  XLS_ASSIGN_OR_RETURN(std::unique_ptr<OrcJit> orc_jit,
-                       OrcJit::Create(/*opt_level=*/OrcJit::kDefaultOptLevel,
-                                      /*emit_object_code=*/true,
-                                      /*emit_msan=*/include_msan));
-  XLS_ASSIGN_OR_RETURN(llvm::DataLayout data_layout,
-                       OrcJit::CreateDataLayout(/*aot_specification=*/true));
-  LlvmTypeConverter type_converter(orc_jit->GetContext(), data_layout);
-  *proto.mutable_inputs_layout() = ArgLayouts(func, type_converter);
-  *proto.mutable_outputs_layout() = ResultLayouts(func, type_converter);
-  proto.add_outputs_names("result");
-  proto.set_has_msan(include_msan);
-  for (const Param* p : func->params()) {
-    proto.add_inputs_names(p->name());
-  }
-  proto.set_xls_package_name(package->name());
-  proto.set_xls_function_identifier(func->name());
-  proto.set_function_symbol(object_code.function_base.function_name());
-  absl::c_for_each(object_code.function_base.input_buffer_sizes(),
-                   [&](int64_t i) { proto.add_input_buffer_sizes(i); });
-  absl::c_for_each(
-      object_code.function_base.input_buffer_preferred_alignments(),
-      [&](int64_t i) { proto.add_input_buffer_alignments(i); });
-  absl::c_for_each(
-      object_code.function_base.input_buffer_abi_alignments(),
-      [&](int64_t i) { proto.add_input_buffer_abi_alignments(i); });
-  absl::c_for_each(object_code.function_base.output_buffer_sizes(),
-                   [&](int64_t i) { proto.add_output_buffer_sizes(i); });
-  absl::c_for_each(
-      object_code.function_base.output_buffer_preferred_alignments(),
-      [&](int64_t i) { proto.add_output_buffer_alignments(i); });
-  absl::c_for_each(
-      object_code.function_base.output_buffer_abi_alignments(),
-      [&](int64_t i) { proto.add_output_buffer_abi_alignments(i); });
-  if (object_code.function_base.HasPackedFunction()) {
-    proto.set_packed_function_symbol(
-        *object_code.function_base.packed_function_name());
-    absl::c_for_each(
-        object_code.function_base.packed_input_buffer_sizes(),
-        [&](int64_t i) { proto.add_packed_input_buffer_sizes(i); });
-    absl::c_for_each(
-        object_code.function_base.packed_output_buffer_sizes(),
-        [&](int64_t i) { proto.add_packed_output_buffer_sizes(i); });
-  }
-
-  proto.set_temp_buffer_size(object_code.function_base.temp_buffer_size());
-  proto.set_temp_buffer_alignment(
-      object_code.function_base.temp_buffer_alignment());
-  for (const auto& [cont, node] :
-       object_code.function_base.continuation_points()) {
-    proto.mutable_continuation_point_node_ids()->at(cont) = node->id();
-  }
-  for (const auto& [chan_name, idx] :
-       object_code.function_base.queue_indices()) {
-    proto.mutable_channel_queue_indices()->at(chan_name) = idx;
-  }
-  return proto;
-}
-
-absl::Status RealMain(const std::string& input_ir_path, const std::string& top,
-                      const std::string& output_object_path,
-                      const std::string& output_proto_path, bool include_msan,
-                      bool generate_textproto) {
-  XLS_ASSIGN_OR_RETURN(std::string input_ir, GetFileContents(input_ir_path));
-  XLS_ASSIGN_OR_RETURN(std::unique_ptr<Package> package,
-                       Parser::ParsePackage(input_ir, input_ir_path));
-
-  Function* f;
-  std::string package_prefix = absl::StrCat("__", package->name(), "__");
-  if (top.empty()) {
-    XLS_ASSIGN_OR_RETURN(f, package->GetTopAsFunction());
-  } else {
-    absl::StatusOr<Function*> maybe_f = package->GetFunction(top);
-    if (maybe_f.ok()) {
-      f = *maybe_f;
-    } else {
-      XLS_ASSIGN_OR_RETURN(
-          f, package->GetFunction(absl::StrCat(package_prefix, top)));
-    }
-  }
-
-  XLS_ASSIGN_OR_RETURN(JitObjectCode object_code,
-                       FunctionJit::CreateObjectCode(f));
-  XLS_RETURN_IF_ERROR(SetFileContents(
-      output_object_path, std::string(object_code.object_code.begin(),
-                                      object_code.object_code.end())));
-
-  XLS_ASSIGN_OR_RETURN(
-      AotEntrypointProto entrypoint,
-      GenerateEntrypointProto(package.get(), f, object_code, include_msan));
-  if (generate_textproto) {
-    std::string text;
-    XLS_RET_CHECK(google::protobuf::TextFormat::PrintToString(entrypoint, &text));
-    XLS_RETURN_IF_ERROR(SetFileContents(output_proto_path, text));
-  } else {
-    XLS_RETURN_IF_ERROR(
-        SetFileContents(output_proto_path, entrypoint.SerializeAsString()));
-  }
-
+  llvm::Function* fn = llvm::cast<llvm::Function>(
+      module
+          .getOrInsertFunction(
+              "__emutls_get_address",
+              llvm::FunctionType::get(void_ptr_ty, void_ptr_ptr_ty,
+                                      /*isVarArg=*/false))
+          .getCallee());
+  fn->setLinkage(llvm::GlobalValue::InternalLinkage);
+  fn->setAttributes(llvm::AttributeList().addFnAttribute(
+      *context, llvm::StringRef("no_sanitize_memory")));
+  auto basic_block =
+      llvm::BasicBlock::Create(*context, "entry", fn, /*InsertBefore=*/nullptr);
+  llvm::IRBuilder<> builder(basic_block);
+  // NB It calls with the *pointer-to* __emutls-key so we need to dereference
+  // it.
+  auto call = builder.CreateCall(
+      tls_impl, {builder.CreateLoad(void_ptr_ty, fn->getArg(0))});
+  builder.CreateRet(call);
   return absl::OkStatus();
 }
 
 }  // namespace
-}  // namespace xls
-
-int main(int argc, char** argv) {
-  xls::InitXls(argv[0], argc, argv);
-  std::string input_ir_path = absl::GetFlag(FLAGS_input);
-  QCHECK(!input_ir_path.empty()) << "--input must be specified.";
-
-  std::string top = absl::GetFlag(FLAGS_top);
-
-  std::string output_object_path = absl::GetFlag(FLAGS_output_object);
-  std::string output_proto_path = absl::GetFlag(FLAGS_output_proto);
-  QCHECK(!output_object_path.empty() && !output_proto_path.empty())
-      << "All of --output_{object,proto} must be specified.";
-
-  bool include_msan = absl::GetFlag(FLAGS_include_msan);
-  absl::Status status =
-      xls::RealMain(input_ir_path, top, output_object_path, output_proto_path,
-                    include_msan, absl::GetFlag(FLAGS_generate_textproto));
-  if (!status.ok()) {
-    std::cout << status.message();
-    return 1;
+absl::Status AotCompiler::CompileModule(
+    std::unique_ptr<llvm::Module>&& module) {
+  auto err = PerformStandardOptimization(module.get());
+  if (err) {
+    std::string mem;
+    llvm::raw_string_ostream oss(mem);
+    oss << err;
+    return absl::InternalError(oss.str());
   }
+  // To avoid the msan pass inserting stores to msan functions we only add it
+  // after all the msan stuff is done.
+  if (include_msan()) {
+    XLS_RETURN_IF_ERROR(AddWeakEmuTls(*module, GetContext()));
+  }
+  llvm::SmallVector<char, 0> stream_buffer;
+  llvm::raw_svector_ostream ostream(stream_buffer);
+  llvm::legacy::PassManager mpm;
+  if (target_machine_->addPassesToEmitFile(mpm, ostream, nullptr,
+                                           llvm::CodeGenFileType::ObjectFile)) {
+    return absl::InternalError("Unable to add passes for object code dumping");
+  }
+  mpm.run(*module);
+  object_code_ =
+      std::vector<uint8_t>(stream_buffer.begin(), stream_buffer.end());
 
-  return 0;
+  return absl::OkStatus();
 }
+
+}  // namespace xls

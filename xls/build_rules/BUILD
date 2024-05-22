@@ -18,6 +18,10 @@ load(":xls_toolchains.bzl", "xls_toolchain")
 package(
     default_applicable_licenses = ["//:license"],
     default_visibility = ["//xls:xls_internal"],
+    features = [
+        "layering_check",
+        "parse_headers",
+    ],
     licenses = ["notice"],  # Apache 2.0
 )
 
@@ -162,6 +166,8 @@ bzl_library(
     deps = [
         ":xls_common_rules_bzl",
         ":xls_config_rules_bzl",
+        ":xls_internal_aot_rules_bzl",
+        ":xls_internal_build_defs_bzl",
         ":xls_ir_rules_bzl",
         ":xls_providers_bzl",
         ":xls_toolchains_bzl",

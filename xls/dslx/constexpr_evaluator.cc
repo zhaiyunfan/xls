@@ -19,6 +19,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -38,12 +39,14 @@
 #include "xls/common/status/ret_check.h"
 #include "xls/common/status/status_macros.h"
 #include "xls/common/visitor.h"
+#include "xls/dslx/bytecode/bytecode.h"
 #include "xls/dslx/bytecode/bytecode_emitter.h"
 #include "xls/dslx/bytecode/bytecode_interpreter.h"
 #include "xls/dslx/bytecode/bytecode_interpreter_options.h"
 #include "xls/dslx/errors.h"
 #include "xls/dslx/frontend/ast.h"
 #include "xls/dslx/frontend/ast_utils.h"
+#include "xls/dslx/frontend/module.h"
 #include "xls/dslx/frontend/pos.h"
 #include "xls/dslx/import_data.h"
 #include "xls/dslx/interp_value.h"
@@ -455,12 +458,22 @@ absl::Status ConstexprEvaluator::HandleIndex(const Index* expr) {
 }
 
 absl::Status ConstexprEvaluator::HandleInvocation(const Invocation* expr) {
-  // Map "invocations" are special - only the first (of two) args must be
-  // constexpr (the second must be a fn to apply).
+  std::optional<std::string_view> called_name;
   auto* callee_name_ref = dynamic_cast<NameRef*>(expr->callee());
-  bool callee_is_map =
-      callee_name_ref != nullptr && callee_name_ref->identifier() == "map";
-  if (callee_is_map) {
+  if (callee_name_ref != nullptr) {
+    called_name = callee_name_ref->identifier();
+    if (called_name == "send" || called_name == "send_if" ||
+        called_name == "recv" || called_name == "recv_if" ||
+        called_name == "recv_non_blocking" ||
+        called_name == "recv_if_non_blocking") {
+      // I/O operations are never constexpr.
+      return absl::OkStatus();
+    }
+  }
+
+  if (called_name == "map") {
+    // Map "invocations" are special - only the first (of two) args must be
+    // constexpr (the second must be a fn to apply).
     EVAL_AS_CONSTEXPR_OR_RETURN(expr->args()[0])
   } else {
     // A regular invocation is constexpr iff its args are constexpr.

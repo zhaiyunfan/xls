@@ -27,11 +27,23 @@ load(
     "xls_dslx_opt_ir",
     "xls_ir_cc_library",
 )
+load(
+    "//xls/build_rules:xls_internal_aot_rules.bzl",
+    "xls_aot_generate",
+)
+load(
+    "//xls/build_rules:xls_internal_build_defs.bzl",
+    "XLS_IS_MSAN_BUILD",
+)
 # cc_proto_library is used in this file
 
 package(
     default_applicable_licenses = ["//:license"],
     default_visibility = ["//xls:xls_internal"],
+    features = [
+        #"layering_check",  TODO(google/xls#1411)
+        "parse_headers",
+    ],
     licenses = ["notice"],  # Apache 2.0
 )
 
@@ -46,14 +58,36 @@ cc_library(
     ],
 )
 
-cc_binary(
-    name = "aot_compiler",
-    srcs = ["aot_compiler.cc"],
+cc_library(
+    name = "jit_callbacks",
+    srcs = ["jit_callbacks.cc"],
+    hdrs = ["jit_callbacks.h"],
     deps = [
+        ":jit_channel_queue",
+        ":jit_runtime",
+        "//xls/ir:events",
+        "//xls/ir:format_preference",
+        "//xls/ir:proc_elaboration",
+        "//xls/ir:type",
+        "//xls/ir:type_manager",
+        "//xls/ir:value",
+        "//xls/ir:xls_type_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+cc_binary(
+    name = "aot_compiler_main",
+    srcs = ["aot_compiler_main.cc"],
+    deps = [
+        ":aot_compiler",
         ":aot_entrypoint_cc_proto",
         ":function_jit",
         ":llvm_type_converter",
-        ":orc_jit",
         ":type_layout_cc_proto",
         "//xls/common:init_xls",
         "//xls/common/file:filesystem",
@@ -93,8 +127,8 @@ py_binary(
 )
 
 cc_test(
-    name = "aot_compiler_test",
-    srcs = ["aot_compiler_test.cc"],
+    name = "aot_basic_function_entrypoint_test",
+    srcs = ["aot_basic_function_entrypoint_test.cc"],
     # The XLS AOT compiler does not currently support cross-compilation.
     deps = [
         ":compound_type_cc",
@@ -122,6 +156,8 @@ cc_library(
         "//xls/common/status:status_macros",
         "//xls/ir",
         "//xls/ir:value",
+        "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/types:span",
         "@com_google_protobuf//:protobuf",
@@ -133,23 +169,23 @@ cc_library(
     srcs = ["ir_builder_visitor.cc"],
     hdrs = ["ir_builder_visitor.h"],
     deps = [
+        ":jit_callbacks",
         ":jit_channel_queue",
-        ":jit_runtime",
+        ":llvm_compiler",
         ":llvm_type_converter",
-        ":orc_jit",
         "//xls/common/status:ret_check",
         "//xls/common/status:status_macros",
         "//xls/ir",
         "//xls/ir:bits",
         "//xls/ir:bits_ops",
         "//xls/ir:elaboration",
-        "//xls/ir:events",
+        "//xls/ir:format_preference",
         "//xls/ir:format_strings",
         "//xls/ir:op",
         "//xls/ir:type",
         "//xls/ir:value",
         "//xls/ir:value_utils",
-        "@com_google_absl//absl/base",
+        "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/base:config",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -165,12 +201,34 @@ cc_library(
 )
 
 cc_library(
-    name = "base_jit_wrapper",
-    hdrs = ["base_jit_wrapper.h"],
+    name = "function_base_jit_wrapper",
+    hdrs = ["function_base_jit_wrapper.h"],
     # Allow jit-wrapper users to see this.
     visibility = ["//xls:xls_users"],
     deps = [
+        ":aot_entrypoint_cc_proto",
+        ":function_base_jit",
         ":function_jit",
+        "//xls/common/status:ret_check",
+        "//xls/common/status:status_macros",
+        "//xls/ir",
+        "//xls/ir:events",
+        "//xls/ir:value",
+        "//xls/ir:value_view",
+        "//xls/public:ir_parser",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+cc_library(
+    name = "proc_base_jit_wrapper",
+    hdrs = ["proc_base_jit_wrapper.h"],
+    # Allow jit-wrapper users to see this.
+    visibility = ["//xls:xls_users"],
+    deps = [
         ":jit_channel_queue",
         ":jit_proc_runtime",
         ":jit_runtime",
@@ -178,15 +236,11 @@ cc_library(
         "//xls/common/status:status_macros",
         "//xls/interpreter:proc_runtime",
         "//xls/ir",
-        "//xls/ir:events",
         "//xls/ir:value",
-        "//xls/ir:value_view",
         "//xls/public:ir_parser",
-        "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/types:span",
     ],
 )
 
@@ -202,6 +256,7 @@ py_binary(
     ],
     visibility = ["//xls:xls_users"],
     deps = [
+        ":aot_entrypoint_py_pb2",
         requirement("Jinja2"),
         requirement("MarkupSafe"),
         "//xls/common:runfiles",
@@ -227,8 +282,36 @@ cc_test(
         "//xls/ir:value",
         "//xls/ir:value_builder",
         "//xls/ir:value_view",
+        "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest",
+    ],
+)
+
+cc_library(
+    name = "llvm_compiler",
+    srcs = ["llvm_compiler.cc"],
+    hdrs = ["llvm_compiler.h"],
+    deps = [
+        "//xls/common/logging:log_lines",
+        "//xls/common/status:ret_check",
+        "//xls/common/status:status_macros",
+        "@com_google_absl//absl/base",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:str_format",
+        "@llvm-project//llvm:AArch64AsmParser",  # build_cleaner: keep
+        "@llvm-project//llvm:AArch64CodeGen",  # build_cleaner: keep
+        "@llvm-project//llvm:Analysis",
+        "@llvm-project//llvm:Instrumentation",
+        "@llvm-project//llvm:Passes",
+        "@llvm-project//llvm:Support",
+        "@llvm-project//llvm:Target",
+        "@llvm-project//llvm:X86AsmParser",  # build_cleaner: keep
+        "@llvm-project//llvm:X86CodeGen",  # build_cleaner: keep
+        "@llvm-project//llvm:ir_headers",
     ],
 )
 
@@ -240,6 +323,15 @@ alias(
     # if the jit is non-functional due to some llvm update.
     # actual = "switchable_function_jit-interpreter_fallback",
     visibility = ["//xls:xls_users"],
+)
+
+cc_library(
+    name = "jit_emulated_tls",
+    srcs = ["jit_emulated_tls.cc"],
+    hdrs = ["jit_emulated_tls.h"],
+    deps = [
+        "@com_google_absl//absl/log",
+    ],
 )
 
 cc_library(
@@ -332,8 +424,11 @@ cc_library(
     hdrs = ["function_jit.h"],
     visibility = ["//xls:xls_users"],
     deps = [
+        ":aot_compiler",
+        ":aot_entrypoint_cc_proto",
         ":function_base_jit",
         ":jit_buffer",
+        ":jit_callbacks",
         ":jit_runtime",
         ":observer",
         ":orc_jit",
@@ -388,6 +483,7 @@ cc_test(
         "//xls/ir:type",
         "//xls/ir:value",
         "//xls/ir:value_view",
+        "//xls/ir:xls_type_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/log:check",
@@ -404,6 +500,41 @@ cc_test(
     ],
 )
 
+# Separate test since for the aot stuff to build at all function-jit needs to be *mostly* working.
+cc_test(
+    name = "function_jit_aot_test",
+    srcs = [
+        "function_jit_aot_test.cc",
+    ],
+    data = [
+        ":multi_function_aot",
+        ":multi_function_with_trace.ir",
+    ],
+    deps = [
+        ":aot_entrypoint_cc_proto",
+        ":function_base_jit",
+        ":function_jit",
+        ":jit_callbacks",
+        ":jit_runtime",
+        ":multi_function_aot",  # build_cleaner: keep
+        "//xls/common:xls_gunit_main",
+        "//xls/common/file:filesystem",
+        "//xls/common/file:get_runfile_path",
+        "//xls/common/status:matchers",
+        "//xls/common/status:ret_check",
+        "//xls/common/status:status_macros",
+        "//xls/ir",
+        "//xls/ir:bits",
+        "//xls/ir:events",
+        "//xls/ir:value",
+        "//xls/ir:value_view",
+        "//xls/public:ir_parser",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
 cc_library(
     name = "jit_channel_queue",
     srcs = ["jit_channel_queue.cc"],
@@ -416,6 +547,7 @@ cc_library(
         "//xls/ir",
         "//xls/ir:channel",
         "//xls/ir:elaboration",
+        "//xls/ir:proc_elaboration",
         "//xls/ir:value",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:inlined_vector",
@@ -455,16 +587,18 @@ cc_library(
     deps = [
         ":llvm_type_converter",
         ":orc_jit",
+        "//xls/common:bits_util",
+        "//xls/common:math_util",
         "//xls/common/status:status_macros",
-        "//xls/ir",
         "//xls/ir:bits",
-        "//xls/ir:ir_parser",
         "//xls/ir:type",
         "//xls/ir:value",
+        "@com_google_absl//absl/log",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/types:span",
         "@llvm-project//llvm:AArch64AsmParser",  # build_cleaner: keep
         "@llvm-project//llvm:AArch64CodeGen",  # build_cleaner: keep
@@ -481,9 +615,12 @@ cc_library(
     hdrs = ["llvm_type_converter.h"],
     deps = [
         ":type_layout",
+        "//xls/common:math_util",
         "//xls/common/status:status_macros",
+        "//xls/ir:bits",
         "//xls/ir:type",
         "//xls/ir:value",
+        "@com_google_absl//absl/base",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/log:check",
@@ -495,15 +632,43 @@ cc_library(
 )
 
 cc_library(
+    name = "aot_compiler",
+    srcs = ["aot_compiler.cc"],
+    hdrs = ["aot_compiler.h"],
+    visibility = [
+        "//xls:xls_internal",
+    ],
+    deps = [
+        ":jit_emulated_tls",
+        ":llvm_compiler",
+        "//xls/common/status:status_macros",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@llvm-project//llvm:AArch64AsmParser",  # build_cleaner: keep
+        "@llvm-project//llvm:AArch64CodeGen",  # build_cleaner: keep
+        "@llvm-project//llvm:Analysis",
+        "@llvm-project//llvm:OrcJIT",
+        "@llvm-project//llvm:Passes",
+        "@llvm-project//llvm:Support",
+        "@llvm-project//llvm:Target",
+        "@llvm-project//llvm:TargetParser",
+        "@llvm-project//llvm:X86AsmParser",  # build_cleaner: keep
+        "@llvm-project//llvm:X86CodeGen",  # build_cleaner: keep
+        "@llvm-project//llvm:ir_headers",
+    ],
+)
+
+cc_library(
     name = "orc_jit",
     srcs = ["orc_jit.cc"],
     hdrs = ["orc_jit.h"],
     deps = [
+        ":jit_emulated_tls",
+        ":llvm_compiler",
         ":observer",
         "//xls/common/logging:log_lines",
-        "//xls/common/status:ret_check",
         "//xls/common/status:status_macros",
-        "@com_google_absl//absl/base",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
@@ -522,7 +687,6 @@ cc_library(
         "@llvm-project//llvm:Passes",
         "@llvm-project//llvm:Support",
         "@llvm-project//llvm:Target",
-        "@llvm-project//llvm:TargetParser",
         "@llvm-project//llvm:X86AsmParser",  # build_cleaner: keep
         "@llvm-project//llvm:X86CodeGen",  # build_cleaner: keep
         "@llvm-project//llvm:ir_headers",
@@ -536,8 +700,10 @@ cc_library(
     deps = [
         ":function_base_jit",
         ":jit_buffer",
+        ":jit_callbacks",
         ":jit_runtime",
         ":orc_jit",
+        "//xls/codegen:module_signature_cc_proto",
         "//xls/common/status:ret_check",
         "//xls/common/status:status_macros",
         "//xls/interpreter:block_evaluator",
@@ -586,6 +752,7 @@ cc_library(
         ":function_base_jit",
         ":ir_builder_visitor",
         ":jit_buffer",
+        ":jit_callbacks",
         ":jit_channel_queue",
         ":jit_runtime",
         ":observer",
@@ -597,6 +764,7 @@ cc_library(
         "//xls/ir:channel",
         "//xls/ir:elaboration",
         "//xls/ir:events",
+        "//xls/ir:proc_elaboration",
         "//xls/ir:value",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log",
@@ -633,8 +801,9 @@ cc_library(
         ":aot_entrypoint_cc_proto",
         ":ir_builder_visitor",
         ":jit_buffer",
-        ":jit_channel_queue",
+        ":jit_callbacks",
         ":jit_runtime",
+        ":llvm_compiler",
         ":llvm_type_converter",
         ":orc_jit",
         "//xls/common:math_util",
@@ -675,6 +844,7 @@ cc_library(
         "//xls/interpreter:serial_proc_runtime",
         "//xls/ir",
         "//xls/ir:channel",
+        "//xls/ir:proc_elaboration",
         "//xls/ir:value",
         "@com_google_absl//absl/status:statusor",
     ],
@@ -703,7 +873,8 @@ cc_binary(
         ":jit_runtime",
         "//xls/ir",
         "//xls/ir:channel",
-        "//xls/ir:elaboration",
+        "//xls/ir:channel_ops",
+        "//xls/ir:proc_elaboration",
         "@com_google_absl//absl/log:check",
         "@com_google_benchmark//:benchmark_main",
     ],
@@ -715,13 +886,17 @@ cc_library(
     hdrs = ["type_layout.h"],
     deps = [
         ":type_layout_cc_proto",
+        "//xls/common:math_util",
         "//xls/common/status:status_macros",
         "//xls/ir",
+        "//xls/ir:bits",
         "//xls/ir:ir_parser",
         "//xls/ir:type",
         "//xls/ir:value",
         "//xls/ir:value_utils",
+        "@com_google_absl//absl/container:inlined_vector",
         "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:span",
     ],
@@ -746,8 +921,11 @@ cc_test(
         "//xls/ir:number_parser",
         "//xls/ir:type",
         "//xls/ir:value",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:span",
+        "@com_google_absl//absl/types:variant",
         "@com_google_googletest//:gtest",
     ],
 )
@@ -838,6 +1016,17 @@ xls_dslx_ir(
     library = ":multi_function_dslx",
 )
 
+xls_dslx_library(
+    name = "multi_function_with_trace_dslx",
+    srcs = ["multi_func_with_trace.x"],
+)
+
+xls_dslx_ir(
+    name = "multi_function_with_trace",
+    dslx_top = "multi_function_one",
+    library = ":multi_function_with_trace_dslx",
+)
+
 xls_ir_cc_library(
     name = "multi_function_one_cc",
     src = ":multi_function.ir",
@@ -877,4 +1066,11 @@ cc_xls_ir_jit_wrapper(
         "class_name": "CompoundJitWrapper",
         "namespace": "something::cool",
     },
+)
+
+xls_aot_generate(
+    name = "multi_function_aot",
+    src = ":multi_function_with_trace.ir",
+    top = "multi_function_one",
+    with_msan = XLS_IS_MSAN_BUILD,
 )

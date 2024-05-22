@@ -13,7 +13,12 @@
 # limitations under the License.
 
 package(
+    default_applicable_licenses = ["//:license"],
     default_visibility = ["//xls:xls_internal"],
+    features = [
+        "layering_check",
+        "parse_headers",
+    ],
     licenses = ["notice"],  # Apache 2.0
 )
 
@@ -27,8 +32,10 @@ cc_library(
         "//xls/common/status:status_macros",
         "//xls/noc/config:network_config_cc_proto",
         "//xls/noc/config:network_config_proto_builder",
+        "//xls/noc/drivers:experiment",
         "//xls/noc/drivers:experiment_factory",
         "//xls/noc/simulation:common",
+        "//xls/noc/simulation:traffic_description",
     ],
 )
 
@@ -43,7 +50,9 @@ cc_library(
         "//xls/common/status:status_macros",
         "//xls/noc/config:network_config_cc_proto",
         "//xls/noc/config:network_config_proto_builder",
+        "//xls/noc/drivers:experiment",
         "//xls/noc/drivers:experiment_factory",
         "//xls/noc/simulation:common",
+        "//xls/noc/simulation:traffic_description",
     ],
 )

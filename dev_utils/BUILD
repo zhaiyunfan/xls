@@ -12,10 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+package(
+    default_applicable_licenses = ["//:license"],
+    features = [
+        "layering_check",
+        "parse_headers",
+    ],
+    licenses = ["notice"],  # Apache 2.0
+)
+
 cc_binary(
     name = "run_clang_tidy_cached",
     srcs = ["run_clang_tidy_cached.cc"],
     deps = [
+        "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/synchronization",

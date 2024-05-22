@@ -46,6 +46,7 @@
 #include "xls/dslx/run_routines/run_routines.h"
 #include "xls/dslx/type_system/parametric_env.h"
 #include "xls/dslx/type_system/type_info.h"
+#include "xls/ir/bits.h"
 #include "xls/ir/format_preference.h"
 #include "xls/ir/format_strings.h"
 
@@ -1549,10 +1550,10 @@ proc BTester {
         (terminator,)
     }
 
-    next(tok: token, state: u32) {
+    next(state: u32) {
         assert_eq(state, u32:0);
         // ensure at least 2 `next()` iterations to create an interpreter frame.
-        let tok = send_if(tok, terminator, state > u32:1, true);
+        let tok = send_if(join(), terminator, state > u32:1, true);
         (state + u32:1)
     }
 })";
@@ -1588,8 +1589,8 @@ proc A<N: u32> {
     config(data_in: chan<u32> in, data_out: chan<u32> out) {
         (data_in, data_out)
     }
-    next(tok: token, state: u32) {
-        let (tok, x) = recv(tok, data_in);
+    next(state: u32) {
+        let (tok, x) = recv(join(), data_in);
         let tok = send(tok, data_out, x + N + state);
         state + u32:1
     }
@@ -1604,7 +1605,7 @@ proc B<M: u32, N: u32> {
         spawn A<N>(data_in, data_out);
         (data_in, data_out)
     }
-    next(tok: token, state: ()) {
+    next(state: ()) {
         ()
     }
 }
@@ -1624,8 +1625,8 @@ proc BTester {
         (data_in_p, data_out_c, terminator)
     }
 
-    next(tok: token, state: ()) {
-        let tok = send(tok, data_in, u32:3);
+    next(state: ()) {
+        let tok = send(join(), data_in, u32:3);
         let (tok, result) = recv(tok, data_out);
         assert_eq(result, u32:9);
         let tok = send(tok, terminator, true);
@@ -1680,7 +1681,7 @@ fn doomed() {
 
   absl::StatusOr<InterpValue> value = Interpret(kProgram, "doomed");
   EXPECT_THAT(value.status(), StatusIs(absl::StatusCode::kInternal,
-              HasSubstr(R"(lhs and rhs were not equal:
+                                       HasSubstr(R"(lhs and rhs were not equal:
   MyStruct {
 <     a: u32:0
 >     a: u32:7
@@ -1740,9 +1741,9 @@ fn doomed() {
 
   absl::StatusOr<InterpValue> value = Interpret(kProgram, "doomed");
   EXPECT_THAT(value.status(), StatusIs(absl::StatusCode::kInternal,
-        AllOf(HasSubstr("were not equal"),
-              HasSubstr(
-R"(lhs and rhs were not equal:
+                                       AllOf(HasSubstr("were not equal"),
+                                             HasSubstr(
+                                                 R"(lhs and rhs were not equal:
   S {
       a: u32:42
       b: u32:42
@@ -1802,10 +1803,10 @@ fn doomed() {
 })";
 
   absl::StatusOr<InterpValue> value = Interpret(kProgram, "doomed");
-  EXPECT_THAT(value.status(), StatusIs(absl::StatusCode::kInternal,
-      AllOf(
-          HasSubstr("were not equal"),
-          HasSubstr(R"(lhs and rhs were not equal:
+  EXPECT_THAT(value.status(),
+              StatusIs(absl::StatusCode::kInternal,
+                       AllOf(HasSubstr("were not equal"),
+                             HasSubstr(R"(lhs and rhs were not equal:
   MyStruct {
       c: InnerStruct[2]:[
           InnerStruct {
@@ -1837,10 +1838,10 @@ fn doomed() {
     assert_eq(a, b)
 })";
   absl::StatusOr<InterpValue> value = Interpret(kProgram, "doomed");
-  EXPECT_THAT(value.status(), StatusIs(absl::StatusCode::kInternal,
-      AllOf(
-          HasSubstr("Flowers::ROSES (u24:16711807"),
-          HasSubstr("Flowers::VIOLETS (u24:15631086"))));
+  EXPECT_THAT(value.status(),
+              StatusIs(absl::StatusCode::kInternal,
+                       AllOf(HasSubstr("Flowers::ROSES (u24:16711807"),
+                             HasSubstr("Flowers::VIOLETS (u24:15631086"))));
 }
 
 TEST(BytecodeInterpreterTest, TraceChannels) {
@@ -1855,8 +1856,8 @@ proc incrementer {
          out_ch: chan<u32> out) {
     (in_ch, out_ch)
   }
-  next(tok: token, _: ()) {
-    let (tok, i) = recv(tok, in_ch);
+  next(_: ()) {
+    let (tok, i) = recv(join(), in_ch);
     let tok = send(tok, out_ch, i + u32:1);
   }
 }
@@ -1876,8 +1877,8 @@ proc tester_proc {
     (input_p, output_c, terminator)
   }
 
-  next(tok: token, state: ()) {
-    let tok = send(tok, data_out, u32:42);
+  next(state: ()) {
+    let tok = send(join(), data_out, u32:42);
     let (tok, result) = recv(tok, data_in);
 
     let tok = send(tok, data_out, u32:100);
@@ -1937,8 +1938,8 @@ proc incrementer {
          out_ch: chan<u32> out) {
     (in_ch, out_ch)
   }
-  next(tok: token, _: ()) {
-    let (tok, i) = recv(tok, in_ch);
+  next(_: ()) {
+    let (tok, i) = recv(join(), in_ch);
     let tok = send(tok, out_ch, i + u32:1);
   }
 }
@@ -1958,8 +1959,8 @@ proc tester_proc {
     (input_p, output_c, terminator)
   }
 
-  next(tok: token, state: ()) {
-    let tok = send(tok, data_out, u32:42);
+  next(state: ()) {
+    let tok = send(join(), data_out, u32:42);
     let (tok, result) = recv(tok, data_in);
 
     let tok = send(tok, data_out, u32:100);
@@ -2021,8 +2022,8 @@ proc incrementer {
          out_ch: chan<u32> out) {
     (in_ch, out_ch)
   }
-  next(tok: token, _: ()) {
-    let (tok, i, valid) = recv_non_blocking(tok, in_ch, u32:0);
+  next(_: ()) {
+    let (tok, i, valid) = recv_non_blocking(join(), in_ch, u32:0);
     let tok = send(tok, out_ch, i + u32:1);
   }
 }
@@ -2042,8 +2043,8 @@ proc tester_proc {
     (input_p, output_c, terminator)
   }
 
-  next(tok: token, state: ()) {
-    let tok = send_if(tok, data_out, false, u32:42);
+  next(state: ()) {
+    let tok = send_if(join(), data_out, false, u32:42);
     let (tok, result) = recv(tok, data_in);
     let tok = send(tok, terminator, true);
  }
@@ -2098,8 +2099,8 @@ proc incrementer {
          out_ch: chan<Foo> out) {
     (in_ch, out_ch)
   }
-  next(tok: token, _: ()) {
-    let (tok, i) = recv(tok, in_ch);
+  next(_: ()) {
+    let (tok, i) = recv(join(), in_ch);
     let tok = send(tok, out_ch, Foo { a:i.a + u32:1, b:i.b + u16:1 });
   }
 }
@@ -2119,9 +2120,9 @@ proc tester_proc {
     (input_p, output_c, terminator)
   }
 
-  next(tok: token, state: ()) {
+  next(state: ()) {
 
-    let tok = send(tok, data_out, Foo { a:u32:42, b:u16:100 });
+    let tok = send(join(), data_out, Foo { a:u32:42, b:u16:100 });
     let (tok, result) = recv(tok, data_in);
 
     let tok = send(tok, data_out, Foo{ a:u32:555, b:u16:123 });
@@ -2182,8 +2183,8 @@ proc incrementer {
          out_ch: chan<u32> out) {
     (in_ch, out_ch)
   }
-  next(tok: token, _: ()) {
-    let (tok, i) = recv(tok, in_ch);
+  next(_: ()) {
+    let (tok, i) = recv(join(), in_ch);
     let tok = send(tok, out_ch, i + u32:1);
   }
 }
@@ -2203,9 +2204,9 @@ proc tester_proc {
     (input_p, output_c, terminator)
   }
 
-  next(tok: token, state: ()) {
+  next(state: ()) {
 
-    let tok = send(tok, data_out[0], u32:42);
+    let tok = send(join(), data_out[0], u32:42);
     let (tok, result) = recv(tok, data_in[0]);
 
     let tok = send(tok, data_out[0], u32:100);

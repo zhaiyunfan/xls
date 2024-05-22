@@ -17,6 +17,10 @@
 package(
     default_applicable_licenses = ["//:license"],
     default_visibility = ["//xls:xls_internal"],
+    features = [
+        "layering_check",
+        "parse_headers",
+    ],
     licenses = ["notice"],  # Apache 2.0
 )
 
@@ -28,6 +32,7 @@ cc_library(
         ":ast",
         ":ast_utils",
         ":module",
+        ":pos",
         ":proc",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
@@ -119,6 +124,7 @@ cc_library(
         "//xls/dslx:channel_direction",
         "//xls/ir:code_template",
         "//xls/ir:foreign_function",
+        "//xls/ir:foreign_function_data_cc_proto",
         "//xls/ir:format_strings",
         "//xls/ir:name_uniquer",
     ],
@@ -315,6 +321,7 @@ cc_test(
     name = "bindings_test",
     srcs = ["bindings_test.cc"],
     deps = [
+        ":ast",
         ":bindings",
         ":pos",
         "@com_google_absl//absl/status",
@@ -405,6 +412,7 @@ cc_library(
         "//xls/ir:bits",
         "//xls/ir:bits_ops",
         "//xls/ir:foreign_function_data_cc_proto",
+        "//xls/ir:format_preference",
         "//xls/ir:format_strings",
         "//xls/ir:number_parser",
     ],

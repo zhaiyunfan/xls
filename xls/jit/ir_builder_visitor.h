@@ -33,25 +33,11 @@
 #include "xls/ir/node.h"
 #include "xls/ir/nodes.h"
 #include "xls/jit/jit_channel_queue.h"
+#include "xls/jit/llvm_compiler.h"
+#include "xls/jit/jit_callbacks.h"
 #include "xls/jit/llvm_type_converter.h"
-#include "xls/jit/orc_jit.h"
 
 namespace xls {
-
-// Data structure passed to the JITted function which contains instance-specific
-// execution-relevant information. Used for JITted procs.
-struct InstanceContext {
-  // The proc instance being evaluated.
-  ProcInstance* instance;
-
-  // The active next values for each parameter.
-  absl::flat_hash_map<Param*, absl::flat_hash_set<Next*>> active_next_values;
-
-  // The channel queues used by the proc instance. The order of queues is
-  // assigned at JIT compile time. The indices of particular queues is baked
-  // into the JITted code for sends and receives.
-  std::vector<JitChannelQueue*> channel_queues;
-};
 
 // Returns whether the given node should be materialized at is uses rather than
 // being written to a buffer to pass to the JITted node function. Only possible
@@ -62,18 +48,18 @@ bool ShouldMaterializeAtUse(Node* node);
 // etc.
 class JitBuilderContext {
  public:
-  explicit JitBuilderContext(OrcJit& orc_jit)
-      : module_(orc_jit.NewModule("__module")),
-        orc_jit_(orc_jit),
+  explicit JitBuilderContext(LlvmCompiler& llvm_compiler)
+      : module_(llvm_compiler.NewModule("__module")),
+        llvm_compiler_(llvm_compiler),
         type_converter_(
-            orc_jit.GetContext(),
-            OrcJit::CreateDataLayout(orc_jit.emit_object_code()).value()) {
-    module_->setTargetTriple(orc_jit.target_triple());
+            llvm_compiler_.GetContext(),
+            llvm_compiler_.CreateDataLayout().value()) {
+    module_->setTargetTriple(llvm_compiler_.target_triple());
   }
 
   llvm::Module* module() const { return module_.get(); }
   llvm::LLVMContext& context() const { return module_->getContext(); }
-  OrcJit& orc_jit() { return orc_jit_; }
+  LlvmCompiler& llvm_compiler() { return llvm_compiler_; }
   LlvmTypeConverter& type_converter() { return type_converter_; }
 
   // Destructively returns the underlying llvm::Module.
@@ -111,7 +97,7 @@ class JitBuilderContext {
 
  private:
   std::unique_ptr<llvm::Module> module_;
-  OrcJit& orc_jit_;
+  LlvmCompiler& llvm_compiler_;
   LlvmTypeConverter type_converter_;
 
   // Map from FunctionBase to the associated JITed llvm::Function.

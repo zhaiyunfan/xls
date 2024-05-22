@@ -13,7 +13,12 @@
 # limitations under the License.
 
 package(
+    default_applicable_licenses = ["//:license"],
     default_visibility = ["//xls:xls_internal"],
+    features = [
+        "layering_check",
+        "parse_headers",
+    ],
     licenses = ["notice"],  # Apache 2.0
 )
 
@@ -61,14 +66,17 @@ cc_library(
     deps = [
         ":module_testbench",
         ":module_testbench_thread",
+        ":testbench_signal_capture",
         ":verilog_simulator",
         "//xls/codegen:flattening",
         "//xls/codegen:module_signature",
+        "//xls/codegen:module_signature_cc_proto",
         "//xls/codegen:vast",
         "//xls/common/status:ret_check",
         "//xls/common/status:status_macros",
         "//xls/ir:bits",
         "//xls/ir:value",
+        "//xls/ir:xls_type_cc_proto",
         "//xls/tools:eval_utils",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log",
@@ -93,6 +101,7 @@ cc_test(
         ":testbench_signal_capture",
         ":verilog_test_base",
         "//xls/codegen:module_signature",
+        "//xls/codegen:verilog_line_map_cc_proto",
         "//xls/common:xls_gunit_main",
         "//xls/common/file:filesystem",
         "//xls/common/file:get_runfile_path",
@@ -121,6 +130,7 @@ cc_library(
         ":testbench_stream",
         ":verilog_simulator",
         "//xls/codegen:module_signature",
+        "//xls/codegen:module_signature_cc_proto",
         "//xls/codegen:vast",
         "//xls/common:source_location",
         "//xls/common/file:temp_directory",
@@ -267,6 +277,7 @@ cc_test(
         "//xls/ir",
         "//xls/ir:bits",
         "//xls/ir:channel",
+        "//xls/ir:channel_ops",
         "//xls/ir:function_builder",
         "//xls/ir:value",
         "//xls/scheduling:pipeline_schedule",
@@ -317,6 +328,7 @@ cc_library(
     hdrs = ["testbench_metadata.h"],
     deps = [
         "//xls/codegen:module_signature",
+        "//xls/codegen:module_signature_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/types:span",

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <filesystem>  // NOLINT
+#include <memory>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -143,6 +144,9 @@ class IcarusVerilogSimulator : public VerilogSimulator {
 
     return absl::OkStatus();
   }
+
+  bool DoesSupportSystemVerilog() const override { return false; }
+  bool DoesSupportAssertions() const override { return false; }
 };
 
 XLS_REGISTER_MODULE_INITIALIZER(iverilog_simulator, {
